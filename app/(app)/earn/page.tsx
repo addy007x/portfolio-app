@@ -6,8 +6,8 @@ import {
   watchEarnPositions,
   addEarnPosition,
   deleteEarnPosition,
-  earnPositionValue,
   computeEarnSummary,
+  groupEarnPositionsBySymbol,
 } from "@/lib/firestore";
 import type { EarnPosition } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
@@ -22,6 +22,8 @@ export default function EarnPage() {
   const { user } = useAuth();
   const { formatMoney, formatSignedMoney } = useCurrencyDisplay();
   const [positions, setPositions] = useState<EarnPosition[]>([]);
+  const [iconMap, setIconMap] = useState<Record<string, string>>({});
+  const [now, setNow] = useState(() => new Date());
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -36,7 +38,39 @@ export default function EarnPage() {
     return watchEarnPositions(user.uid, setPositions);
   }, [user]);
 
-  const summary = computeEarnSummary(positions);
+  // Ticks every second so the compounded totals visibly grow in real time.
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const symbolsKey = Array.from(new Set(positions.map((p) => p.symbol))).sort().join(",");
+  useEffect(() => {
+    const symbols = symbolsKey ? symbolsKey.split(",") : [];
+    if (symbols.length === 0) return;
+    fetch(`/api/prices?crypto=${symbols.join(",")}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data?.cryptoIcons) return;
+        setIconMap((prev) => {
+          const next = { ...prev };
+          for (const sym of symbols) {
+            const url = data.cryptoIcons[sym];
+            if (url) next[sym] = url;
+          }
+          return next;
+        });
+      })
+      .catch(() => {});
+  }, [symbolsKey]);
+
+  const summary = computeEarnSummary(positions, now);
+  const groups = groupEarnPositionsBySymbol(positions, now);
+
+  async function handleDeleteGroup(positionIds: string[]) {
+    if (!user) return;
+    await Promise.all(positionIds.map((id) => deleteEarnPosition(user.uid, id)));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -102,32 +136,32 @@ export default function EarnPage() {
             ยังไม่มีรายการใน Earn กดปุ่ม + เพื่อเพิ่มรายการแรก
           </div>
         )}
-        {positions.map((p) => {
-          const value = earnPositionValue(p);
-          const gain = value - p.principal;
+        {groups.map((g) => {
+          const gain = g.totalValue - g.totalPrincipal;
           return (
-            <Card key={p.id} className="!p-3.5">
+            <Card key={g.symbol} className="!p-3.5">
               <div className="flex items-center gap-3">
                 <div
                   className="w-9 h-9 rounded-[11px] flex items-center justify-center flex-none overflow-hidden"
                   style={{ background: "var(--pal-crypto)22" }}
                 >
-                  <AssetIcon symbol={p.symbol} assetClass="crypto" />
+                  <AssetIcon symbol={g.symbol} assetClass="crypto" iconUrl={iconMap[g.symbol]} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold truncate">{p.symbol}</div>
+                  <div className="text-sm font-bold truncate">{g.symbol}</div>
                   <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                    Flexible {p.apy}% APY
+                    Flexible {g.apy}% APY
+                    {g.positionIds.length > 1 && ` · รวม ${g.positionIds.length} รายการ`}
                   </div>
                 </div>
                 <div className="text-right flex-none">
-                  <div className="text-sm font-bold">{formatMoney(value)}</div>
+                  <div className="text-sm font-bold">{formatMoney(g.totalValue)}</div>
                   <div className="text-[11px] font-semibold" style={{ color: "var(--up)" }}>
                     {formatSignedMoney(gain)}
                   </div>
                 </div>
                 <button
-                  onClick={() => user && deleteEarnPosition(user.uid, p.id)}
+                  onClick={() => handleDeleteGroup(g.positionIds)}
                   className="flex-none ml-1"
                   style={{ color: "var(--muted)" }}
                 >
