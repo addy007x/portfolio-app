@@ -142,7 +142,7 @@ export default function PortfolioPage() {
       </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title="เพิ่มสินทรัพย์">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
           <FormInput
             label="สัญลักษณ์ (Symbol)"
             required

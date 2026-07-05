@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export function Modal({
   open,
@@ -14,27 +15,34 @@ export function Modal({
   children: ReactNode;
 }) {
   if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 bg-black/60" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={onClose}>
       <div
-        className="absolute bottom-0 left-0 right-0 rounded-t-[24px] p-5 pb-8 max-h-[85vh] overflow-y-auto"
+        className="w-full rounded-t-[24px]"
         style={{
           background: "var(--surface)",
           animation: "sheetup 0.25s ease both",
           maxWidth: 480,
           margin: "0 auto",
+          maxHeight: "97vh",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center px-5 py-4" style={{ flexShrink: 0 }}>
           <div className="text-[16px] font-bold">{title}</div>
           <button onClick={onClose} style={{ color: "var(--muted)" }}>
             ✕
           </button>
         </div>
-        {children}
+        <div style={{ flex: 1, overflowY: "auto", paddingLeft: 20, paddingRight: 20, paddingBottom: 32 }}>
+          {children}
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
