@@ -31,7 +31,7 @@ export default function GoalsPage() {
       name: form.name,
       targetAmount: parseFloat(form.targetAmount) || 0,
       currentAmount: parseFloat(form.currentAmount) || 0,
-      targetDate: form.targetDate || undefined,
+      ...(form.targetDate ? { targetDate: form.targetDate } : {}),
       icon: "flag",
     });
     setForm({ name: "", targetAmount: "", currentAmount: "", targetDate: "" });
