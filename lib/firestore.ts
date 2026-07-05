@@ -197,10 +197,6 @@ function daysBetweenExact(a: Date, b: Date): number {
   return (b.getTime() - a.getTime()) / 86_400_000;
 }
 
-function daysBetweenFloor(a: Date, b: Date): number {
-  return Math.floor(daysBetweenExact(a, b));
-}
-
 // Continuously-compounded value of one position as of a given date (0 before it starts).
 export function earnPositionValue(p: EarnPosition, asOf: Date = new Date()): number {
   const start = new Date(p.startDate);
@@ -218,11 +214,16 @@ export interface EarnSummary {
   history: ValueSnapshot[];
 }
 
-// Builds a real (not simulated-market) day-by-day series from each
-// position's own APY and elapsed time, so the chart is honest even
-// though it isn't backed by stored daily snapshots. `asOf` drives both
-// the headline totals and the chart's final point, so passing a
-// ticking clock keeps the graph in sync with the live numbers.
+const HISTORY_POINTS = 30;
+
+// Builds a real (not simulated-market) series from each position's own APY
+// and elapsed time, so the chart is honest even though it isn't backed by
+// stored daily snapshots. Samples a fixed number of evenly-spaced instants
+// between the earliest start date and `asOf` — rather than one point per
+// whole calendar day — so a position started earlier today still shows a
+// real (if short) growth curve instead of needing to wait until tomorrow
+// for a second data point. `asOf` also drives the headline totals, so
+// passing a ticking clock keeps the graph in sync with the live numbers.
 export function computeEarnSummary(
   positions: EarnPosition[],
   asOf: Date = new Date()
@@ -239,15 +240,12 @@ export function computeEarnSummary(
       positions[0].startDate
     );
     const start = new Date(earliest);
-    const totalDays = Math.max(0, daysBetweenFloor(start, asOf));
-    for (let d = 0; d <= totalDays; d++) {
-      // Last point uses the exact "asOf" instant so the chart's endpoint
-      // matches the live ticking total; earlier points land on day boundaries.
-      const day = d === totalDays ? asOf : new Date(start);
-      if (d !== totalDays) day.setDate(day.getDate() + d);
-      const value = positions.reduce((s, p) => s + earnPositionValue(p, day), 0);
-      const dateStr = day.toISOString().slice(0, 10);
-      history.push({ id: dateStr, date: dateStr, totalValue: value });
+    const spanMs = Math.max(0, asOf.getTime() - start.getTime());
+    for (let i = 0; i <= HISTORY_POINTS; i++) {
+      const t = new Date(start.getTime() + (spanMs * i) / HISTORY_POINTS);
+      const value = positions.reduce((s, p) => s + earnPositionValue(p, t), 0);
+      const dateStr = t.toISOString().slice(0, 10);
+      history.push({ id: `${dateStr}-${i}`, date: dateStr, totalValue: value });
     }
   }
 
