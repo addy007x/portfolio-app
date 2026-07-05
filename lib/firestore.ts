@@ -19,6 +19,7 @@ import type {
   Dividend,
   Goal,
   CashflowEntry,
+  ValueSnapshot,
   AssetClass,
 } from "@/lib/types";
 import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
@@ -150,6 +151,28 @@ export async function deleteCashflowEntry(uid: string, id: string) {
   await deleteDoc(doc(db, "users", uid, "cashflowEntries", id));
 }
 
+// ---- Value history (daily portfolio-value snapshots) ----
+export function watchValueHistory(
+  uid: string,
+  cb: (items: ValueSnapshot[]) => void
+) {
+  return watchCollection<ValueSnapshot>(uid, "valueHistory", "date", cb);
+}
+
+// One document per calendar day (doc id = date), overwritten on every poll
+// so repeated opens in the same day don't create duplicate points.
+export async function recordValueSnapshot(
+  uid: string,
+  date: string,
+  totalValue: number
+) {
+  await setDoc(
+    doc(db, "users", uid, "valueHistory", date),
+    { date, totalValue },
+    { merge: true }
+  );
+}
+
 // ---- User profile ----
 export interface UserProfile {
   name: string;
@@ -199,18 +222,6 @@ export interface AllocationSlice {
   color: string;
   value: number;
   pct: number;
-}
-
-export function buildInvestedHistory(transactions: Transaction[]): number[] {
-  const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
-  let running = 0;
-  const points: number[] = [];
-  for (const t of sorted) {
-    if (t.type === "buy") running += t.totalValue;
-    else if (t.type === "sell") running -= t.totalValue;
-    points.push(running);
-  }
-  return points;
 }
 
 export interface HoldingStats {

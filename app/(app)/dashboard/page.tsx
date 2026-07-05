@@ -4,12 +4,11 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import {
   watchHoldings,
-  watchTransactions,
+  watchValueHistory,
   computePortfolioSummary,
   computeAllocation,
-  buildInvestedHistory,
 } from "@/lib/firestore";
-import type { Holding, Transaction } from "@/lib/types";
+import type { Holding, ValueSnapshot } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { Donut } from "@/components/Donut";
 import { ValueChart } from "@/components/ValueChart";
@@ -20,12 +19,12 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { formatMoney, formatSignedMoney } = useCurrencyDisplay();
   const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [history, setHistory] = useState<ValueSnapshot[]>([]);
 
   useEffect(() => {
     if (!user) return;
     const unsub1 = watchHoldings(user.uid, setHoldings);
-    const unsub2 = watchTransactions(user.uid, setTransactions);
+    const unsub2 = watchValueHistory(user.uid, (items) => setHistory([...items].reverse()));
     return () => {
       unsub1();
       unsub2();
@@ -34,7 +33,6 @@ export default function DashboardPage() {
 
   const summary = computePortfolioSummary(holdings);
   const allocation = computeAllocation(holdings);
-  const history = buildInvestedHistory(transactions);
 
   return (
     <div style={{ animation: "scin 0.3s ease both" }}>
@@ -69,7 +67,7 @@ export default function DashboardPage() {
         >
           {formatSignedMoney(summary.pnl)} ({formatPct(summary.pnlPct)})
         </div>
-        <ValueChart points={history} />
+        <ValueChart points={history} formatMoney={formatMoney} />
       </Card>
 
       <div className="grid grid-cols-3 gap-2.5 mt-3">

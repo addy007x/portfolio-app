@@ -85,3 +85,9 @@ export interface CashflowEntry {
   type: CashflowType;
   amount: number;
 }
+
+export interface ValueSnapshot {
+  id: string; // same as date, e.g. "2026-07-05"
+  date: string; // YYYY-MM-DD
+  totalValue: number;
+}

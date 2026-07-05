@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
-import { watchHoldings } from "@/lib/firestore";
+import { watchHoldings, computePortfolioSummary, recordValueSnapshot } from "@/lib/firestore";
 import { refreshLivePrices } from "@/lib/priceFeed";
 import type { Holding } from "@/lib/types";
 
@@ -30,6 +30,11 @@ export function LivePriceUpdater() {
       inFlightRef.current = true;
       try {
         await refreshLivePrices(uid, holdingsRef.current);
+        if (holdingsRef.current.length > 0) {
+          const today = new Date().toISOString().slice(0, 10);
+          const summary = computePortfolioSummary(holdingsRef.current);
+          await recordValueSnapshot(uid, today, summary.totalValue);
+        }
       } finally {
         inFlightRef.current = false;
       }
