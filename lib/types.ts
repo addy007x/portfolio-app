@@ -91,3 +91,11 @@ export interface ValueSnapshot {
   date: string; // YYYY-MM-DD
   totalValue: number;
 }
+
+export interface EarnPosition {
+  id: string;
+  symbol: string;
+  principal: number; // THB, amount deposited
+  apy: number; // percent, e.g. 5.2
+  startDate: string; // YYYY-MM-DD
+}

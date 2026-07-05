@@ -6,9 +6,11 @@ import { formatThaiDate } from "@/lib/format";
 export function ValueChart({
   points,
   formatMoney,
+  emptyMessage = "กราฟจะเริ่มแสดงหลังเปิดแอปทิ้งไว้ครบ 2 วันขึ้นไป (บันทึกมูลค่าพอร์ตวันละครั้ง)",
 }: {
   points: ValueSnapshot[];
   formatMoney: (value: number) => string;
+  emptyMessage?: string;
 }) {
   if (points.length < 2) {
     return (
@@ -16,7 +18,7 @@ export function ValueChart({
         className="flex items-center justify-center text-xs text-center px-4"
         style={{ height: 120, color: "var(--muted)" }}
       >
-        กราฟจะเริ่มแสดงหลังเปิดแอปทิ้งไว้ครบ 2 วันขึ้นไป (บันทึกมูลค่าพอร์ตวันละครั้ง)
+        {emptyMessage}
       </div>
     );
   }

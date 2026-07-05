@@ -20,6 +20,7 @@ import type {
   Goal,
   CashflowEntry,
   ValueSnapshot,
+  EarnPosition,
   AssetClass,
 } from "@/lib/types";
 import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
@@ -171,6 +172,73 @@ export async function recordValueSnapshot(
     { date, totalValue },
     { merge: true }
   );
+}
+
+// ---- Earn (simulated flexible-savings/staking positions) ----
+export function watchEarnPositions(
+  uid: string,
+  cb: (items: EarnPosition[]) => void
+) {
+  return watchCollection<EarnPosition>(uid, "earnPositions", "startDate", cb);
+}
+
+export async function addEarnPosition(uid: string, data: Omit<EarnPosition, "id">) {
+  await addDoc(userCollection(uid, "earnPositions"), data);
+}
+
+export async function deleteEarnPosition(uid: string, id: string) {
+  await deleteDoc(doc(db, "users", uid, "earnPositions", id));
+}
+
+function daysBetween(a: Date, b: Date): number {
+  return Math.floor((b.getTime() - a.getTime()) / 86_400_000);
+}
+
+// Daily-compounded value of one position as of a given date (0 before it starts).
+export function earnPositionValue(p: EarnPosition, asOf: Date = new Date()): number {
+  const start = new Date(p.startDate);
+  if (asOf < start) return 0;
+  const days = daysBetween(start, asOf);
+  const dailyRate = p.apy / 100 / 365;
+  return p.principal * Math.pow(1 + dailyRate, days);
+}
+
+export interface EarnSummary {
+  totalValue: number;
+  totalPrincipal: number;
+  totalGain: number;
+  totalGainPct: number;
+  history: ValueSnapshot[];
+}
+
+// Builds a real (not simulated-market) day-by-day series from each
+// position's own APY and elapsed time, so the chart is honest even
+// though it isn't backed by stored daily snapshots.
+export function computeEarnSummary(positions: EarnPosition[]): EarnSummary {
+  const totalPrincipal = positions.reduce((s, p) => s + p.principal, 0);
+  const totalValue = positions.reduce((s, p) => s + earnPositionValue(p), 0);
+  const totalGain = totalValue - totalPrincipal;
+  const totalGainPct = totalPrincipal > 0 ? (totalGain / totalPrincipal) * 100 : 0;
+
+  const history: ValueSnapshot[] = [];
+  if (positions.length > 0) {
+    const earliest = positions.reduce(
+      (min, p) => (p.startDate < min ? p.startDate : min),
+      positions[0].startDate
+    );
+    const start = new Date(earliest);
+    const today = new Date();
+    const totalDays = Math.max(0, daysBetween(start, today));
+    for (let d = 0; d <= totalDays; d++) {
+      const day = new Date(start);
+      day.setDate(day.getDate() + d);
+      const value = positions.reduce((s, p) => s + earnPositionValue(p, day), 0);
+      const dateStr = day.toISOString().slice(0, 10);
+      history.push({ id: dateStr, date: dateStr, totalValue: value });
+    }
+  }
+
+  return { totalValue, totalPrincipal, totalGain, totalGainPct, history };
 }
 
 // ---- User profile ----
