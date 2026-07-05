@@ -85,6 +85,14 @@ export async function addTransaction(
   });
 }
 
+export async function updateTransaction(
+  uid: string,
+  id: string,
+  data: Partial<Omit<Transaction, "id">>
+) {
+  await updateDoc(doc(db, "users", uid, "transactions", id), data);
+}
+
 export async function deleteTransaction(uid: string, id: string) {
   await deleteDoc(doc(db, "users", uid, "transactions", id));
 }
@@ -203,6 +211,39 @@ export function buildInvestedHistory(transactions: Transaction[]): number[] {
     points.push(running);
   }
   return points;
+}
+
+export interface HoldingStats {
+  quantity: number;
+  avgCost: number;
+  lastPrice: number;
+}
+
+// Recomputed from the full transaction history for one symbol, so editing
+// or deleting a past transaction always leaves quantity/avgCost consistent
+// (rather than incrementally patching them at write time).
+export function computeHoldingStats(transactions: Transaction[]): HoldingStats {
+  const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
+  let quantity = 0;
+  let costBasis = 0;
+  let lastPrice = 0;
+  for (const t of sorted) {
+    if (t.type === "buy") {
+      quantity += t.quantity;
+      costBasis += t.quantity * t.price;
+      lastPrice = t.price;
+    } else if (t.type === "sell") {
+      const avgCost = quantity > 0 ? costBasis / quantity : 0;
+      quantity = Math.max(0, quantity - t.quantity);
+      costBasis = quantity > 0 ? quantity * avgCost : 0;
+      lastPrice = t.price;
+    }
+  }
+  return {
+    quantity,
+    avgCost: quantity > 0 ? costBasis / quantity : 0,
+    lastPrice,
+  };
 }
 
 export function computeAllocation(holdings: Holding[]): AllocationSlice[] {
