@@ -19,8 +19,6 @@ const ASSET_CLASSES: AssetClass[] = [
   "foreign_stock",
   "etf",
   "crypto",
-  "gold",
-  "reit",
   "cash",
 ];
 

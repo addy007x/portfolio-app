@@ -3,8 +3,6 @@ export type AssetClass =
   | "foreign_stock"
   | "etf"
   | "crypto"
-  | "gold"
-  | "reit"
   | "cash";
 
 export const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
@@ -12,8 +10,6 @@ export const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
   foreign_stock: "หุ้นนอกประเทศ",
   etf: "ETF",
   crypto: "คริปโต",
-  gold: "ทองคำ",
-  reit: "REIT",
   cash: "เงินสด",
 };
 
@@ -22,8 +18,6 @@ export const ASSET_CLASS_COLOR: Record<AssetClass, string> = {
   foreign_stock: "var(--pal-us)",
   etf: "var(--pal-etf)",
   crypto: "var(--pal-crypto)",
-  gold: "var(--pal-gold)",
-  reit: "var(--pal-reit)",
   cash: "var(--pal-cash)",
 };
 
@@ -32,8 +26,6 @@ export const ASSET_CLASS_ICON: Record<AssetClass, string> = {
   foreign_stock: "public",
   etf: "donut_small",
   crypto: "currency_bitcoin",
-  gold: "star",
-  reit: "apartment",
   cash: "account_balance_wallet",
 };
 
