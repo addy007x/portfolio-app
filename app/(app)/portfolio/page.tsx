@@ -1,0 +1,199 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import {
+  watchHoldings,
+  addHolding,
+  deleteHolding,
+  computePortfolioSummary,
+} from "@/lib/firestore";
+import type { Holding, AssetClass } from "@/lib/types";
+import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR, ASSET_CLASS_ICON } from "@/lib/types";
+import { Card, Icon } from "@/components/Card";
+import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
+import { formatBaht, formatPct } from "@/lib/format";
+
+const ASSET_CLASSES: AssetClass[] = [
+  "th_stock",
+  "foreign_stock",
+  "etf",
+  "crypto",
+  "gold",
+  "reit",
+  "cash",
+];
+
+export default function PortfolioPage() {
+  const { user } = useAuth();
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    symbol: "",
+    name: "",
+    assetClass: "th_stock" as AssetClass,
+    quantity: "",
+    avgCost: "",
+    currentPrice: "",
+  });
+
+  useEffect(() => {
+    if (!user) return;
+    return watchHoldings(user.uid, setHoldings);
+  }, [user]);
+
+  const summary = computePortfolioSummary(holdings);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user) return;
+    await addHolding(user.uid, {
+      symbol: form.symbol.toUpperCase(),
+      name: form.name || form.symbol.toUpperCase(),
+      assetClass: form.assetClass,
+      quantity: parseFloat(form.quantity) || 0,
+      avgCost: parseFloat(form.avgCost) || 0,
+      currentPrice: parseFloat(form.currentPrice) || 0,
+    });
+    setForm({
+      symbol: "",
+      name: "",
+      assetClass: "th_stock",
+      quantity: "",
+      avgCost: "",
+      currentPrice: "",
+    });
+    setOpen(false);
+  }
+
+  return (
+    <div style={{ animation: "scin 0.3s ease both" }}>
+      <div className="flex justify-between items-start mb-4 mt-1">
+        <div className="text-[26px] font-extrabold tracking-tight">Portfolio</div>
+        <button
+          onClick={() => setOpen(true)}
+          className="w-9 h-9 rounded-full flex items-center justify-center"
+          style={{ background: "var(--accent)" }}
+        >
+          <Icon name="add" style={{ fontSize: 22, color: "#04120c" }} />
+        </button>
+      </div>
+
+      <Card>
+        <div className="text-[13px]" style={{ color: "var(--muted)" }}>
+          มูลค่ารวม
+        </div>
+        <div className="text-2xl font-extrabold mt-1">{formatBaht(summary.totalValue)}</div>
+        <div
+          className="text-sm font-bold mt-0.5"
+          style={{ color: summary.pnl >= 0 ? "var(--up)" : "var(--down)" }}
+        >
+          {formatPct(summary.pnlPct)}
+        </div>
+      </Card>
+
+      <div className="flex flex-col gap-2.5 mt-3">
+        {holdings.length === 0 && (
+          <div className="text-sm text-center py-8" style={{ color: "var(--muted)" }}>
+            ยังไม่มีสินทรัพย์ในพอร์ต กดปุ่ม + เพื่อเพิ่มรายการแรก
+          </div>
+        )}
+        {holdings.map((h) => {
+          const value = h.quantity * h.currentPrice;
+          const pnl = value - h.quantity * h.avgCost;
+          return (
+            <Card key={h.id} className="!p-3.5">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-9 h-9 rounded-[11px] flex items-center justify-center flex-none"
+                  style={{ background: `${ASSET_CLASS_COLOR[h.assetClass]}22` }}
+                >
+                  <Icon
+                    name={ASSET_CLASS_ICON[h.assetClass]}
+                    style={{ fontSize: 19, color: ASSET_CLASS_COLOR[h.assetClass] }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold truncate">{h.symbol}</div>
+                  <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
+                    {ASSET_CLASS_LABEL[h.assetClass]} · {h.quantity} หน่วย
+                  </div>
+                </div>
+                <div className="text-right flex-none">
+                  <div className="text-sm font-bold">{formatBaht(value)}</div>
+                  <div
+                    className="text-[11px]"
+                    style={{ color: pnl >= 0 ? "var(--up)" : "var(--down)" }}
+                  >
+                    {formatBaht(pnl)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => user && deleteHolding(user.uid, h.id)}
+                  className="flex-none ml-1"
+                  style={{ color: "var(--muted)" }}
+                >
+                  <Icon name="close" style={{ fontSize: 18 }} />
+                </button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Modal open={open} onClose={() => setOpen(false)} title="เพิ่มสินทรัพย์">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <FormInput
+            label="สัญลักษณ์ (Symbol)"
+            required
+            value={form.symbol}
+            onChange={(e) => setForm({ ...form, symbol: e.target.value })}
+          />
+          <FormInput
+            label="ชื่อ (ไม่บังคับ)"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+          <FormSelect
+            label="ประเภทสินทรัพย์"
+            value={form.assetClass}
+            onChange={(e) =>
+              setForm({ ...form, assetClass: e.target.value as AssetClass })
+            }
+          >
+            {ASSET_CLASSES.map((c) => (
+              <option key={c} value={c}>
+                {ASSET_CLASS_LABEL[c]}
+              </option>
+            ))}
+          </FormSelect>
+          <FormInput
+            label="จำนวนหน่วย"
+            type="number"
+            step="any"
+            required
+            value={form.quantity}
+            onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+          />
+          <FormInput
+            label="ราคาต้นทุนเฉลี่ย/หน่วย"
+            type="number"
+            step="any"
+            required
+            value={form.avgCost}
+            onChange={(e) => setForm({ ...form, avgCost: e.target.value })}
+          />
+          <FormInput
+            label="ราคาปัจจุบัน/หน่วย"
+            type="number"
+            step="any"
+            required
+            value={form.currentPrice}
+            onChange={(e) => setForm({ ...form, currentPrice: e.target.value })}
+          />
+          <SubmitButton>เพิ่มสินทรัพย์</SubmitButton>
+        </form>
+      </Modal>
+    </div>
+  );
+}

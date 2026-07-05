@@ -1,26 +1,56 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #000000;
+  --surface: #0c110e;
+  --surface2: #141c17;
+  --nav-bg: rgba(6, 10, 8, 0.8);
+  --card-border: 1px solid rgba(255, 255, 255, 0.04);
+  --card-shadow: 0 10px 34px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  --radius: 22px;
+  --radius-sm: 17px;
+  --text: #f2f8f5;
+  --muted: #8b978f;
+  --accent: #25e29a;
+  --accent-soft: rgba(37, 226, 154, 0.15);
+  --up: #25e29a;
+  --down: #ff6b6b;
+  --chart-line: #25e29a;
+  --chart-fill: rgba(37, 226, 154, 0.22);
+
+  --pal-th: #18c98a;
+  --pal-us: #4c8dff;
+  --pal-etf: #22c1c9;
+  --pal-crypto: #ff9f43;
+  --pal-gold: #ffd43b;
+  --pal-reit: #9b7bff;
+  --pal-cash: #8b978f;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+*::-webkit-scrollbar {
+  display: none;
+}
+
+html, body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Anuphan', 'Noto Sans Thai', sans-serif;
+}
+
+@keyframes scin {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes sheetup {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
