@@ -219,14 +219,19 @@ const HISTORY_POINTS = 30;
 // Builds a real (not simulated-market) series from each position's own APY
 // and elapsed time, so the chart is honest even though it isn't backed by
 // stored daily snapshots. Samples a fixed number of evenly-spaced instants
-// between the earliest start date and `asOf` — rather than one point per
-// whole calendar day — so a position started earlier today still shows a
-// real (if short) growth curve instead of needing to wait until tomorrow
-// for a second data point. `asOf` also drives the headline totals, so
-// passing a ticking clock keeps the graph in sync with the live numbers.
+// between the effective start and `asOf` — rather than one point per whole
+// calendar day — so a position started earlier today still shows a real
+// (if short) growth curve instead of needing to wait until tomorrow for a
+// second data point. `asOf` also drives the headline totals, so passing a
+// ticking clock keeps the graph in sync with the live numbers.
+//
+// `rangeStart`, if given and later than the earliest position's actual
+// start, zooms the chart into that window (e.g. "last 24H") without
+// touching the headline totals, which always reflect every position.
 export function computeEarnSummary(
   positions: EarnPosition[],
-  asOf: Date = new Date()
+  asOf: Date = new Date(),
+  rangeStart?: Date
 ): EarnSummary {
   const totalPrincipal = positions.reduce((s, p) => s + p.principal, 0);
   const totalValue = positions.reduce((s, p) => s + earnPositionValue(p, asOf), 0);
@@ -239,7 +244,8 @@ export function computeEarnSummary(
       (min, p) => (p.startDate < min ? p.startDate : min),
       positions[0].startDate
     );
-    const start = new Date(earliest);
+    const lifetimeStart = new Date(earliest);
+    const start = rangeStart && rangeStart > lifetimeStart ? rangeStart : lifetimeStart;
     const spanMs = Math.max(0, asOf.getTime() - start.getTime());
     for (let i = 0; i <= HISTORY_POINTS; i++) {
       const t = new Date(start.getTime() + (spanMs * i) / HISTORY_POINTS);

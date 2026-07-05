@@ -17,6 +17,8 @@ import { Modal, FormInput, SubmitButton } from "@/components/Modal";
 import { formatPct } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 import { fetchFxRateToThb } from "@/lib/priceFeed";
+import { RangeSelector } from "@/components/RangeSelector";
+import { rangeStartDate, type ChartRange } from "@/lib/chartRange";
 
 export default function EarnPage() {
   const { user } = useAuth();
@@ -24,6 +26,7 @@ export default function EarnPage() {
   const [positions, setPositions] = useState<EarnPosition[]>([]);
   const [iconMap, setIconMap] = useState<Record<string, string>>({});
   const [now, setNow] = useState(() => new Date());
+  const [range, setRange] = useState<ChartRange>("24H");
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -64,7 +67,7 @@ export default function EarnPage() {
       .catch(() => {});
   }, [symbolsKey]);
 
-  const summary = computeEarnSummary(positions, now);
+  const summary = computeEarnSummary(positions, now, rangeStartDate(range, now));
   const groups = groupEarnPositionsBySymbol(positions, now);
 
   async function handleDeleteGroup(positionIds: string[]) {
@@ -110,8 +113,11 @@ export default function EarnPage() {
       </div>
 
       <Card>
-        <div className="text-[13px]" style={{ color: "var(--muted)" }}>
-          มูลค่ารวมใน Earn
+        <div className="flex justify-between items-center">
+          <div className="text-[13px]" style={{ color: "var(--muted)" }}>
+            มูลค่ารวมใน Earn
+          </div>
+          <RangeSelector value={range} onChange={setRange} />
         </div>
         <div className="text-[31px] font-extrabold tracking-tight mt-1.5">
           {formatMoney(summary.totalValue)}

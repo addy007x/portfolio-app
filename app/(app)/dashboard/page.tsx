@@ -12,6 +12,8 @@ import type { Holding, ValueSnapshot } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { Donut } from "@/components/Donut";
 import { ValueChart } from "@/components/ValueChart";
+import { RangeSelector } from "@/components/RangeSelector";
+import { rangeStartDate, type ChartRange } from "@/lib/chartRange";
 import { formatPct, formatThaiDate } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 
@@ -20,6 +22,7 @@ export default function DashboardPage() {
   const { formatMoney, formatSignedMoney } = useCurrencyDisplay();
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [history, setHistory] = useState<ValueSnapshot[]>([]);
+  const [range, setRange] = useState<ChartRange>("1M");
 
   useEffect(() => {
     if (!user) return;
@@ -33,6 +36,10 @@ export default function DashboardPage() {
 
   const summary = computePortfolioSummary(holdings);
   const allocation = computeAllocation(holdings);
+  const cutoff = rangeStartDate(range, new Date());
+  const filteredHistory = cutoff
+    ? history.filter((h) => new Date(h.date).getTime() >= cutoff.getTime())
+    : history;
 
   return (
     <div style={{ animation: "scin 0.3s ease both" }}>
@@ -51,12 +58,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-1.5 text-[13px]" style={{ color: "var(--muted)" }}>
             <span>มูลค่าพอร์ตทั้งหมด</span>
           </div>
-          <div
-            className="flex items-center gap-0.5 rounded-[9px] px-2 py-1 text-xs font-semibold"
-            style={{ background: "var(--surface2)" }}
-          >
-            ปัจจุบัน
-          </div>
+          <RangeSelector value={range} onChange={setRange} />
         </div>
         <div className="text-[33px] font-extrabold tracking-tight mt-2">
           {formatMoney(summary.totalValue)}
@@ -67,7 +69,7 @@ export default function DashboardPage() {
         >
           {formatSignedMoney(summary.pnl)} ({formatPct(summary.pnlPct)})
         </div>
-        <ValueChart points={history} formatMoney={formatMoney} />
+        <ValueChart points={filteredHistory} formatMoney={formatMoney} />
       </Card>
 
       <div className="grid grid-cols-3 gap-2.5 mt-3">
