@@ -1,16 +1,34 @@
 import { updateHolding } from "@/lib/firestore";
 import type { Holding } from "@/lib/types";
 
-const RECOGNIZED_FX_CODES = new Set([
-  "USD",
-  "EUR",
-  "JPY",
-  "GBP",
-  "SGD",
-  "CNY",
-  "AUD",
-  "HKD",
-]);
+export const CURRENCY_LABEL: Record<string, string> = {
+  THB: "บาท (THB)",
+  USD: "ดอลลาร์สหรัฐ (USD)",
+  EUR: "ยูโร (EUR)",
+  JPY: "เยน (JPY)",
+  GBP: "ปอนด์ (GBP)",
+  SGD: "ดอลลาร์สิงคโปร์ (SGD)",
+  CNY: "หยวน (CNY)",
+  AUD: "ดอลลาร์ออสเตรเลีย (AUD)",
+  HKD: "ดอลลาร์ฮ่องกง (HKD)",
+};
+
+export const CURRENCY_CODES = Object.keys(CURRENCY_LABEL);
+
+const RECOGNIZED_FX_CODES = new Set(CURRENCY_CODES.filter((c) => c !== "THB"));
+
+export async function fetchFxRateToThb(currency: string): Promise<number> {
+  if (currency === "THB") return 1;
+  try {
+    const res = await fetch(`/api/prices?fx=${currency}`);
+    if (!res.ok) return 1;
+    const data = await res.json();
+    const rate = data.fx?.[currency];
+    return typeof rate === "number" && Number.isFinite(rate) ? rate : 1;
+  } catch {
+    return 1;
+  }
+}
 
 interface PricesResponse {
   crypto: Record<string, number | null>;

@@ -13,6 +13,7 @@ import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR, ASSET_CLASS_ICON } from "@/lib/ty
 import { Card, Icon } from "@/components/Card";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatBaht, formatPct } from "@/lib/format";
+import { CURRENCY_CODES, CURRENCY_LABEL, fetchFxRateToThb } from "@/lib/priceFeed";
 
 const ASSET_CLASSES: AssetClass[] = [
   "th_stock",
@@ -28,12 +29,13 @@ export default function PortfolioPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     symbol: "",
-    name: "",
     assetClass: "th_stock" as AssetClass,
+    currency: "THB",
     quantity: "",
     avgCost: "",
     currentPrice: "",
   });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -45,23 +47,35 @@ export default function PortfolioPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
-    await addHolding(user.uid, {
-      symbol: form.symbol.toUpperCase(),
-      name: form.name || form.symbol.toUpperCase(),
-      assetClass: form.assetClass,
-      quantity: parseFloat(form.quantity) || 0,
-      avgCost: parseFloat(form.avgCost) || 0,
-      currentPrice: parseFloat(form.currentPrice) || 0,
-    });
-    setForm({
-      symbol: "",
-      name: "",
-      assetClass: "th_stock",
-      quantity: "",
-      avgCost: "",
-      currentPrice: "",
-    });
-    setOpen(false);
+    setSubmitting(true);
+    try {
+      const isCash = form.assetClass === "cash";
+      const symbol = (isCash ? form.currency : form.symbol).toUpperCase();
+      const rate = await fetchFxRateToThb(form.currency);
+      const avgCostThb = (parseFloat(form.avgCost) || 0) * rate;
+      const currentPrice =
+        form.assetClass === "th_stock" ? parseFloat(form.currentPrice) || 0 : avgCostThb;
+
+      await addHolding(user.uid, {
+        symbol,
+        name: symbol,
+        assetClass: form.assetClass,
+        quantity: parseFloat(form.quantity) || 0,
+        avgCost: avgCostThb,
+        currentPrice,
+      });
+      setForm({
+        symbol: "",
+        assetClass: "th_stock",
+        currency: "THB",
+        quantity: "",
+        avgCost: "",
+        currentPrice: "",
+      });
+      setOpen(false);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -154,66 +168,103 @@ export default function PortfolioPage() {
         })}
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="เพิ่มสินทรัพย์">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <FormInput
-            label="สัญลักษณ์ (Symbol)"
-            required
-            value={form.symbol}
-            onChange={(e) => setForm({ ...form, symbol: e.target.value })}
-          />
-          <FormInput
-            label="ชื่อ (ไม่บังคับ)"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-          <FormSelect
-            label="ประเภทสินทรัพย์"
-            value={form.assetClass}
-            onChange={(e) =>
-              setForm({ ...form, assetClass: e.target.value as AssetClass })
-            }
-          >
-            {ASSET_CLASSES.map((c) => (
-              <option key={c} value={c}>
-                {ASSET_CLASS_LABEL[c]}
-              </option>
-            ))}
-          </FormSelect>
-          <FormInput
-            label="จำนวนหน่วย"
-            type="number"
-            step="any"
-            required
-            value={form.quantity}
-            onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-          />
-          <FormInput
-            label="ราคาต้นทุนเฉลี่ย/หน่วย"
-            type="number"
-            step="any"
-            required
-            value={form.avgCost}
-            onChange={(e) => setForm({ ...form, avgCost: e.target.value })}
-          />
-          <FormInput
-            label="ราคาปัจจุบัน/หน่วย"
-            type="number"
-            step="any"
-            required
-            value={form.currentPrice}
-            onChange={(e) => setForm({ ...form, currentPrice: e.target.value })}
-          />
-          {form.assetClass === "th_stock" ? (
-            <div className="text-[11px]" style={{ color: "var(--muted)" }}>
-              หุ้นไทยไม่มีราคาอัตโนมัติ ต้องอัปเดตราคาเองเป็นระยะ
-            </div>
-          ) : (
-            <div className="text-[11px]" style={{ color: "var(--muted)" }}>
-              ราคาจะอัปเดตอัตโนมัติทุก 1 นาทีหลังบันทึก (ใช้ symbol ที่ถูกต้องตามตลาด)
+      <Modal open={open} onClose={() => setOpen(false)} title="เพิ่มสินทรัพย์ใหม่">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div className="text-[11px] -mt-1" style={{ color: "var(--muted)" }}>
+            กรอกข้อมูลพื้นฐาน ระบบจะดึงราคาล่าสุดให้อัตโนมัติ
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <FormSelect
+              label="ประเภท"
+              value={form.assetClass}
+              onChange={(e) =>
+                setForm({ ...form, assetClass: e.target.value as AssetClass })
+              }
+            >
+              {ASSET_CLASSES.map((c) => (
+                <option key={c} value={c}>
+                  {ASSET_CLASS_LABEL[c]}
+                </option>
+              ))}
+            </FormSelect>
+            <FormSelect
+              label="สกุลเงิน"
+              value={form.currency}
+              onChange={(e) => setForm({ ...form, currency: e.target.value })}
+            >
+              {CURRENCY_CODES.map((c) => (
+                <option key={c} value={c}>
+                  {CURRENCY_LABEL[c]}
+                </option>
+              ))}
+            </FormSelect>
+          </div>
+
+          {form.assetClass !== "cash" && (
+            <div>
+              <FormInput
+                label="Ticker"
+                required
+                placeholder="AAPL"
+                value={form.symbol}
+                onChange={(e) => setForm({ ...form, symbol: e.target.value })}
+              />
+              <div className="text-[11px] mt-1" style={{ color: "var(--muted)" }}>
+                เช่น AAPL, BTC, PTT
+              </div>
             </div>
           )}
-          <SubmitButton>เพิ่มสินทรัพย์</SubmitButton>
+
+          <div className="grid grid-cols-2 gap-3">
+            <FormInput
+              label="จำนวน"
+              type="number"
+              step="any"
+              required
+              value={form.quantity}
+              onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+            />
+            <FormInput
+              label={`ต้นทุนเฉลี่ย (${form.currency})`}
+              type="number"
+              step="any"
+              required
+              value={form.avgCost}
+              onChange={(e) => setForm({ ...form, avgCost: e.target.value })}
+            />
+          </div>
+
+          {form.assetClass === "th_stock" && (
+            <FormInput
+              label="ราคาปัจจุบัน/หน่วย (บาท)"
+              type="number"
+              step="any"
+              required
+              value={form.currentPrice}
+              onChange={(e) => setForm({ ...form, currentPrice: e.target.value })}
+            />
+          )}
+
+          <div className="text-[11px]" style={{ color: "var(--muted)" }}>
+            {form.assetClass === "th_stock"
+              ? "หุ้นไทยไม่มีราคาอัตโนมัติ ต้องอัปเดตราคาเองเป็นระยะ"
+              : "ราคาจะอัปเดตอัตโนมัติทุก 1 นาทีหลังบันทึก"}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-[14px] py-3 font-bold text-center mt-2"
+              style={{ background: "var(--surface2)", color: "var(--text)" }}
+            >
+              ยกเลิก
+            </button>
+            <SubmitButton disabled={submitting}>
+              {submitting ? "กำลังบันทึก..." : "+ เพิ่มสินทรัพย์"}
+            </SubmitButton>
+          </div>
         </form>
       </Modal>
     </div>
