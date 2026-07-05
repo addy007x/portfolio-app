@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { BottomNav } from "@/components/BottomNav";
 import { LivePriceUpdater } from "@/components/LivePriceUpdater";
+import { CurrencyProvider } from "@/lib/currencyDisplay";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -26,15 +27,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div
-      className="min-h-screen mx-auto flex flex-col"
-      style={{ background: "var(--bg)", maxWidth: 480 }}
-    >
-      <LivePriceUpdater />
-      <div className="flex-1 overflow-y-auto px-4 pt-4" style={{ paddingBottom: 96 }}>
-        {children}
+    <CurrencyProvider>
+      <div
+        className="min-h-screen mx-auto flex flex-col"
+        style={{ background: "var(--bg)", maxWidth: 480 }}
+      >
+        <LivePriceUpdater />
+        <div className="flex-1 overflow-y-auto px-4 pt-4" style={{ paddingBottom: 96 }}>
+          {children}
+        </div>
+        <BottomNav />
       </div>
-      <BottomNav />
-    </div>
+    </CurrencyProvider>
   );
 }

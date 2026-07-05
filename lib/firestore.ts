@@ -4,6 +4,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  getDoc,
   onSnapshot,
   query,
   orderBy,
@@ -155,6 +156,11 @@ export async function updateUserProfile(
   data: Partial<UserProfile>
 ) {
   await setDoc(doc(db, "users", uid), data, { merge: true });
+}
+
+export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+  const snap = await getDoc(doc(db, "users", uid));
+  return snap.exists() ? (snap.data() as UserProfile) : null;
 }
 
 // ---- Derived aggregates ----

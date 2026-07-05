@@ -6,7 +6,7 @@ import { watchCashflow, addCashflowEntry, deleteCashflowEntry } from "@/lib/fire
 import type { CashflowEntry, CashflowType } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
-import { formatBaht, formatSignedBaht } from "@/lib/format";
+import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 
 function currentMonth() {
   return new Date().toISOString().slice(0, 7);
@@ -14,6 +14,7 @@ function currentMonth() {
 
 export default function CashflowPage() {
   const { user } = useAuth();
+  const { formatMoney, formatSignedMoney } = useCurrencyDisplay();
   const [entries, setEntries] = useState<CashflowEntry[]>([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -79,20 +80,20 @@ export default function CashflowPage() {
           className="text-2xl font-extrabold mt-1"
           style={{ color: net >= 0 ? "var(--up)" : "var(--down)" }}
         >
-          {formatSignedBaht(net)}
+          {formatSignedMoney(net)}
         </div>
         <div className="flex gap-2.5 mt-3.5">
           <div className="flex-1 rounded-[12px] p-3" style={{ background: "var(--surface2)" }}>
             <div className="text-xs" style={{ color: "var(--muted)" }}>
               รายรับ
             </div>
-            <div className="font-extrabold text-base mt-0.5">{formatBaht(income)}</div>
+            <div className="font-extrabold text-base mt-0.5">{formatMoney(income)}</div>
           </div>
           <div className="flex-1 rounded-[12px] p-3" style={{ background: "var(--surface2)" }}>
             <div className="text-xs" style={{ color: "var(--muted)" }}>
               รายจ่าย
             </div>
-            <div className="font-extrabold text-base mt-0.5">{formatBaht(expense)}</div>
+            <div className="font-extrabold text-base mt-0.5">{formatMoney(expense)}</div>
           </div>
         </div>
       </Card>
@@ -105,7 +106,7 @@ export default function CashflowPage() {
               <div key={c.category}>
                 <div className="flex justify-between text-xs mb-1">
                   <span>{c.category}</span>
-                  <span style={{ color: "var(--muted)" }}>{formatBaht(c.amount)}</span>
+                  <span style={{ color: "var(--muted)" }}>{formatMoney(c.amount)}</span>
                 </div>
                 <div
                   className="h-1.5 rounded-[4px] overflow-hidden"
@@ -151,7 +152,7 @@ export default function CashflowPage() {
                 style={{ color: e.type === "income" ? "var(--up)" : "var(--down)" }}
               >
                 {e.type === "income" ? "+" : "-"}
-                {formatBaht(e.amount)}
+                {formatMoney(e.amount)}
               </div>
               <button
                 onClick={() => user && deleteCashflowEntry(user.uid, e.id)}

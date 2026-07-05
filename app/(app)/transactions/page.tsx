@@ -14,7 +14,8 @@ import type { Transaction, TransactionType, Holding, AssetClass } from "@/lib/ty
 import { ASSET_CLASS_LABEL } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
-import { formatBaht, formatThaiDate } from "@/lib/format";
+import { formatThaiDate } from "@/lib/format";
+import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 
 const ASSET_CLASSES: AssetClass[] = [
   "th_stock",
@@ -42,6 +43,7 @@ const FILTERS: Array<"all" | TransactionType> = ["all", "buy", "sell", "transfer
 
 export default function TransactionsPage() {
   const { user } = useAuth();
+  const { formatMoney } = useCurrencyDisplay();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [filter, setFilter] = useState<"all" | TransactionType>("all");
@@ -180,10 +182,10 @@ export default function TransactionsPage() {
                   {TYPE_LABEL[t.type]} {t.symbol}
                 </div>
                 <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                  {formatThaiDate(t.date)} · {t.quantity} หน่วย @ {formatBaht(t.price)}
+                  {formatThaiDate(t.date)} · {t.quantity} หน่วย @ {formatMoney(t.price)}
                 </div>
               </div>
-              <div className="text-sm font-bold flex-none">{formatBaht(t.totalValue)}</div>
+              <div className="text-sm font-bold flex-none">{formatMoney(t.totalValue)}</div>
               <button
                 onClick={() => user && deleteTransaction(user.uid, t.id)}
                 className="flex-none ml-1"

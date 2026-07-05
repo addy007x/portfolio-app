@@ -6,10 +6,11 @@ import { watchGoals, addGoal, updateGoal, deleteGoal } from "@/lib/firestore";
 import type { Goal } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { Modal, FormInput, SubmitButton } from "@/components/Modal";
-import { formatBaht } from "@/lib/format";
+import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 
 export default function GoalsPage() {
   const { user } = useAuth();
+  const { formatMoney } = useCurrencyDisplay();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -65,7 +66,7 @@ export default function GoalsPage() {
                 <div>
                   <div className="text-sm font-bold">{g.name}</div>
                   <div className="text-[11px] mt-0.5" style={{ color: "var(--muted)" }}>
-                    {formatBaht(g.currentAmount)} / {formatBaht(g.targetAmount)}
+                    {formatMoney(g.currentAmount)} / {formatMoney(g.targetAmount)}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

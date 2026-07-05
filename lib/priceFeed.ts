@@ -4,13 +4,6 @@ import type { Holding } from "@/lib/types";
 export const CURRENCY_LABEL: Record<string, string> = {
   THB: "บาท (THB)",
   USD: "ดอลลาร์สหรัฐ (USD)",
-  EUR: "ยูโร (EUR)",
-  JPY: "เยน (JPY)",
-  GBP: "ปอนด์ (GBP)",
-  SGD: "ดอลลาร์สิงคโปร์ (SGD)",
-  CNY: "หยวน (CNY)",
-  AUD: "ดอลลาร์ออสเตรเลีย (AUD)",
-  HKD: "ดอลลาร์ฮ่องกง (HKD)",
 };
 
 export const CURRENCY_CODES = Object.keys(CURRENCY_LABEL);

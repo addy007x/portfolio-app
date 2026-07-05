@@ -6,10 +6,12 @@ import { watchDividends, addDividend, deleteDividend } from "@/lib/firestore";
 import type { Dividend } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { Modal, FormInput, SubmitButton } from "@/components/Modal";
-import { formatBaht, formatThaiDate } from "@/lib/format";
+import { formatThaiDate } from "@/lib/format";
+import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 
 export default function DividendsPage() {
   const { user } = useAuth();
+  const { formatMoney } = useCurrencyDisplay();
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -85,7 +87,7 @@ export default function DividendsPage() {
           </div>
         </div>
         <div className="text-2xl font-extrabold mt-1" style={{ color: "var(--up)" }}>
-          {formatBaht(ytdTotal)}
+          {formatMoney(ytdTotal)}
         </div>
         <div className="flex items-end gap-2 mt-4" style={{ height: 90 }}>
           {monthly.map((v, i) => {
@@ -134,7 +136,7 @@ export default function DividendsPage() {
                 </div>
               </div>
               <div className="text-sm font-bold" style={{ color: "var(--up)" }}>
-                {formatBaht(d.totalAmount)}
+                {formatMoney(d.totalAmount)}
               </div>
               <button
                 onClick={() => user && deleteDividend(user.uid, d.id)}

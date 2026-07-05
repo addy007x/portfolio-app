@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { updateUserProfile } from "@/lib/firestore";
 import { Card, Icon } from "@/components/Card";
+import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 
 const MENU = [
   { icon: "person", label: "ข้อมูลส่วนตัว" },
@@ -16,6 +17,7 @@ const MENU = [
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
+  const { currency, setCurrency } = useCurrencyDisplay();
   const router = useRouter();
   const [name, setName] = useState(user?.displayName ?? "");
 
@@ -73,12 +75,32 @@ export default function SettingsPage() {
             ไทย
           </span>
         </div>
-        <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: "var(--card-border)" }}>
           <Icon name="dark_mode" style={{ fontSize: 20, color: "var(--muted)" }} />
           <span className="flex-1 text-sm">ธีม</span>
           <span className="text-sm" style={{ color: "var(--muted)" }}>
             เข้ม
           </span>
+        </div>
+        <div className="flex items-center gap-3 px-4 py-3.5">
+          <Icon name="payments" style={{ fontSize: 20, color: "var(--muted)" }} />
+          <span className="flex-1 text-sm">สกุลเงิน</span>
+          <div className="flex rounded-[10px] overflow-hidden" style={{ background: "var(--surface2)" }}>
+            {(["THB", "USD"] as const).map((c) => (
+              <button
+                key={c}
+                onClick={() => setCurrency(c)}
+                className="px-3 py-1.5 text-xs font-semibold"
+                style={
+                  currency === c
+                    ? { background: "var(--accent)", color: "#04120c" }
+                    : { color: "var(--muted)" }
+                }
+              >
+                {c === "THB" ? "บาท" : "USD"}
+              </button>
+            ))}
+          </div>
         </div>
       </Card>
 

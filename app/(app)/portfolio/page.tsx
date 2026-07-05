@@ -9,10 +9,12 @@ import {
   computePortfolioSummary,
 } from "@/lib/firestore";
 import type { Holding, AssetClass } from "@/lib/types";
-import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR, ASSET_CLASS_ICON } from "@/lib/types";
+import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
+import { AssetIcon } from "@/components/AssetIcon";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
-import { formatBaht, formatPct } from "@/lib/format";
+import { formatPct } from "@/lib/format";
+import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 import { CURRENCY_CODES, CURRENCY_LABEL, fetchFxRateToThb } from "@/lib/priceFeed";
 
 const ASSET_CLASSES: AssetClass[] = [
@@ -25,6 +27,7 @@ const ASSET_CLASSES: AssetClass[] = [
 
 export default function PortfolioPage() {
   const { user } = useAuth();
+  const { formatMoney } = useCurrencyDisplay();
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -95,7 +98,7 @@ export default function PortfolioPage() {
         <div className="text-[13px]" style={{ color: "var(--muted)" }}>
           มูลค่ารวม
         </div>
-        <div className="text-2xl font-extrabold mt-1">{formatBaht(summary.totalValue)}</div>
+        <div className="text-2xl font-extrabold mt-1">{formatMoney(summary.totalValue)}</div>
         <div
           className="text-sm font-bold mt-0.5"
           style={{ color: summary.pnl >= 0 ? "var(--up)" : "var(--down)" }}
@@ -120,15 +123,7 @@ export default function PortfolioPage() {
                   className="w-9 h-9 rounded-[11px] flex items-center justify-center flex-none overflow-hidden"
                   style={{ background: `${ASSET_CLASS_COLOR[h.assetClass]}22` }}
                 >
-                  {h.iconUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={h.iconUrl} alt={h.symbol} className="w-5 h-5" />
-                  ) : (
-                    <Icon
-                      name={ASSET_CLASS_ICON[h.assetClass]}
-                      style={{ fontSize: 19, color: ASSET_CLASS_COLOR[h.assetClass] }}
-                    />
-                  )}
+                  <AssetIcon symbol={h.symbol} assetClass={h.assetClass} iconUrl={h.iconUrl} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold truncate flex items-center gap-1.5">
@@ -147,12 +142,12 @@ export default function PortfolioPage() {
                   </div>
                 </div>
                 <div className="text-right flex-none">
-                  <div className="text-sm font-bold">{formatBaht(value)}</div>
+                  <div className="text-sm font-bold">{formatMoney(value)}</div>
                   <div
                     className="text-[11px]"
                     style={{ color: pnl >= 0 ? "var(--up)" : "var(--down)" }}
                   >
-                    {formatBaht(pnl)}
+                    {formatMoney(pnl)}
                   </div>
                 </div>
                 <button

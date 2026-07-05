@@ -13,10 +13,12 @@ import type { Holding, Transaction } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { Donut } from "@/components/Donut";
 import { ValueChart } from "@/components/ValueChart";
-import { formatBaht, formatSignedBaht, formatPct, formatThaiDate } from "@/lib/format";
+import { formatPct, formatThaiDate } from "@/lib/format";
+import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { formatMoney, formatSignedMoney } = useCurrencyDisplay();
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
@@ -59,13 +61,13 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="text-[33px] font-extrabold tracking-tight mt-2">
-          {formatBaht(summary.totalValue)}
+          {formatMoney(summary.totalValue)}
         </div>
         <div
           className="font-bold text-sm mt-0.5"
           style={{ color: summary.pnl >= 0 ? "var(--up)" : "var(--down)" }}
         >
-          {formatSignedBaht(summary.pnl)} ({formatPct(summary.pnlPct)})
+          {formatSignedMoney(summary.pnl)} ({formatPct(summary.pnlPct)})
         </div>
         <ValueChart points={history} />
       </Card>
@@ -85,7 +87,7 @@ export default function DashboardPage() {
             className="text-sm font-extrabold mt-0.5"
             style={{ color: summary.pnl >= 0 ? "var(--up)" : "var(--down)" }}
           >
-            {formatSignedBaht(summary.pnl)}
+            {formatSignedMoney(summary.pnl)}
           </div>
           <div className="text-[10px]" style={{ color: "var(--muted)" }}>
             ({formatPct(summary.pnlPct)})
@@ -118,7 +120,7 @@ export default function DashboardPage() {
           <div className="text-[11px] mt-2" style={{ color: "var(--muted)" }}>
             เงินลงทุน
           </div>
-          <div className="text-sm font-extrabold mt-0.5">{formatBaht(summary.totalCost)}</div>
+          <div className="text-sm font-extrabold mt-0.5">{formatMoney(summary.totalCost)}</div>
           <div className="text-[10px]">&nbsp;</div>
         </Card>
       </div>
@@ -137,7 +139,7 @@ export default function DashboardPage() {
                 <div className="text-[10px]" style={{ color: "var(--muted)" }}>
                   Total
                 </div>
-                <div className="text-sm font-extrabold">{formatBaht(summary.totalValue)}</div>
+                <div className="text-sm font-extrabold">{formatMoney(summary.totalValue)}</div>
               </div>
             </div>
             <div className="flex-1 flex flex-col gap-1.5">
