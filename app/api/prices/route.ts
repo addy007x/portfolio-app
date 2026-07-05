@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 
-// Common crypto ticker -> CoinGecko id. CoinGecko has no free ticker-search
-// endpoint, so unlisted tickers just fall back to the manual price the user
-// entered (see lib/priceFeed.ts).
+// Fast-path for common tickers, so they resolve without a network round trip.
+// Anything not listed here falls through to resolveCryptoId(), which uses
+// CoinGecko's free /search endpoint to look it up dynamically.
 const CRYPTO_ID_MAP: Record<string, string> = {
   BTC: "bitcoin",
   ETH: "ethereum",
@@ -24,7 +24,12 @@ const CRYPTO_ID_MAP: Record<string, string> = {
   BCH: "bitcoin-cash",
   XLM: "stellar",
   UNI: "uniswap",
+  XAUT: "tether-gold",
 };
+
+// In-memory cache so repeat lookups on a warm serverless instance skip the
+// /search call. Not persisted across cold starts, which is fine here.
+const cryptoIdCache = new Map<string, string | null>();
 
 const FX_CODES = new Set(["USD", "EUR", "JPY", "GBP", "SGD", "CNY", "AUD", "HKD", "THB"]);
 
@@ -32,6 +37,25 @@ async function fetchJson(url: string, init?: RequestInit) {
   const res = await fetch(url, init);
   if (!res.ok) throw new Error(`fetch failed ${res.status}`);
   return res.json();
+}
+
+async function resolveCryptoId(symbol: string): Promise<string | null> {
+  if (CRYPTO_ID_MAP[symbol]) return CRYPTO_ID_MAP[symbol];
+  if (cryptoIdCache.has(symbol)) return cryptoIdCache.get(symbol) ?? null;
+  try {
+    const data = await fetchJson(
+      `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(symbol)}`
+    );
+    const matches = (
+      (data.coins ?? []) as Array<{ id: string; symbol: string; market_cap_rank: number | null }>
+    ).filter((c) => c.symbol.toUpperCase() === symbol);
+    matches.sort((a, b) => (a.market_cap_rank ?? Infinity) - (b.market_cap_rank ?? Infinity));
+    const id = matches[0]?.id ?? null;
+    cryptoIdCache.set(symbol, id);
+    return id;
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -55,9 +79,14 @@ export async function GET(req: NextRequest) {
   const fx: Record<string, number | null> = {};
 
   // ---- Crypto prices + icons via CoinGecko ----
-  const cryptoIds = cryptoSymbols
-    .map((sym) => CRYPTO_ID_MAP[sym])
-    .filter((id): id is string => Boolean(id));
+  const symbolToId = new Map<string, string>();
+  await Promise.all(
+    cryptoSymbols.map(async (sym) => {
+      const id = await resolveCryptoId(sym);
+      if (id) symbolToId.set(sym, id);
+    })
+  );
+  const cryptoIds = Array.from(new Set(symbolToId.values()));
   if (cryptoIds.length) {
     try {
       const data = await fetchJson(
@@ -67,7 +96,7 @@ export async function GET(req: NextRequest) {
         data.map((c: { id: string; current_price: number; image: string }) => [c.id, c])
       );
       for (const sym of cryptoSymbols) {
-        const id = CRYPTO_ID_MAP[sym];
+        const id = symbolToId.get(sym);
         const entry = id ? byId.get(id) : undefined;
         crypto[sym] = entry?.current_price ?? null;
         cryptoIcons[sym] = entry?.image ?? null;
