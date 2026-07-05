@@ -37,6 +37,8 @@ export interface Holding {
   quantity: number;
   avgCost: number;
   currentPrice: number;
+  iconUrl?: string;
+  livePrice?: boolean;
   updatedAt?: unknown;
 }
 

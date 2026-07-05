@@ -103,16 +103,31 @@ export default function PortfolioPage() {
             <Card key={h.id} className="!p-3.5">
               <div className="flex items-center gap-3">
                 <div
-                  className="w-9 h-9 rounded-[11px] flex items-center justify-center flex-none"
+                  className="w-9 h-9 rounded-[11px] flex items-center justify-center flex-none overflow-hidden"
                   style={{ background: `${ASSET_CLASS_COLOR[h.assetClass]}22` }}
                 >
-                  <Icon
-                    name={ASSET_CLASS_ICON[h.assetClass]}
-                    style={{ fontSize: 19, color: ASSET_CLASS_COLOR[h.assetClass] }}
-                  />
+                  {h.iconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={h.iconUrl} alt={h.symbol} className="w-5 h-5" />
+                  ) : (
+                    <Icon
+                      name={ASSET_CLASS_ICON[h.assetClass]}
+                      style={{ fontSize: 19, color: ASSET_CLASS_COLOR[h.assetClass] }}
+                    />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold truncate">{h.symbol}</div>
+                  <div className="text-sm font-bold truncate flex items-center gap-1.5">
+                    {h.symbol}
+                    {h.livePrice && (
+                      <span
+                        className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
+                        style={{ background: "var(--up)22", color: "var(--up)" }}
+                      >
+                        สด
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
                     {ASSET_CLASS_LABEL[h.assetClass]} · {h.quantity} หน่วย
                   </div>
@@ -189,6 +204,15 @@ export default function PortfolioPage() {
             value={form.currentPrice}
             onChange={(e) => setForm({ ...form, currentPrice: e.target.value })}
           />
+          {form.assetClass === "th_stock" ? (
+            <div className="text-[11px]" style={{ color: "var(--muted)" }}>
+              หุ้นไทยไม่มีราคาอัตโนมัติ ต้องอัปเดตราคาเองเป็นระยะ
+            </div>
+          ) : (
+            <div className="text-[11px]" style={{ color: "var(--muted)" }}>
+              ราคาจะอัปเดตอัตโนมัติทุก 1 นาทีหลังบันทึก (ใช้ symbol ที่ถูกต้องตามตลาด)
+            </div>
+          )}
           <SubmitButton>เพิ่มสินทรัพย์</SubmitButton>
         </form>
       </Modal>
