@@ -244,8 +244,8 @@ export function computeEarnSummary(
     for (let i = 0; i <= HISTORY_POINTS; i++) {
       const t = new Date(start.getTime() + (spanMs * i) / HISTORY_POINTS);
       const value = positions.reduce((s, p) => s + earnPositionValue(p, t), 0);
-      const dateStr = t.toISOString().slice(0, 10);
-      history.push({ id: `${dateStr}-${i}`, date: dateStr, totalValue: value });
+      // Full ISO (not just the date) so tooltips can show sub-day precision.
+      history.push({ id: `${t.toISOString()}-${i}`, date: t.toISOString(), totalValue: value });
     }
   }
 
