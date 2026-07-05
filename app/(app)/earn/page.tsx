@@ -16,6 +16,7 @@ import { ValueChart } from "@/components/ValueChart";
 import { Modal, FormInput, SubmitButton } from "@/components/Modal";
 import { formatPct } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
+import { fetchFxRateToThb } from "@/lib/priceFeed";
 
 export default function EarnPage() {
   const { user } = useAuth();
@@ -42,10 +43,11 @@ export default function EarnPage() {
     if (!user) return;
     setSubmitting(true);
     try {
+      const rate = await fetchFxRateToThb("USD");
       await addEarnPosition(user.uid, {
         symbol: form.symbol.toUpperCase(),
         apy: parseFloat(form.apy) || 0,
-        principal: parseFloat(form.principal) || 0,
+        principal: (parseFloat(form.principal) || 0) * rate,
         startDate: form.startDate,
       });
       setForm({
@@ -155,7 +157,7 @@ export default function EarnPage() {
               onChange={(e) => setForm({ ...form, apy: e.target.value })}
             />
             <FormInput
-              label="จำนวนเงิน (บาท)"
+              label="จำนวนเงิน (USD)"
               type="number"
               step="any"
               required
