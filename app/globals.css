@@ -27,6 +27,23 @@
   --pal-cash: #8b978f;
 }
 
+:root[data-theme="light"] {
+  --bg: #f4f6f5;
+  --surface: #ffffff;
+  --surface2: #eef1ef;
+  --nav-bg: rgba(255, 255, 255, 0.85);
+  --card-border: 1px solid rgba(0, 0, 0, 0.06);
+  --card-shadow: 0 10px 34px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --text: #0e1512;
+  --muted: #6b756f;
+  --accent: #0fa876;
+  --accent-soft: rgba(15, 168, 118, 0.12);
+  --up: #0fa876;
+  --down: #e0393e;
+  --chart-line: #0fa876;
+  --chart-fill: rgba(15, 168, 118, 0.16);
+}
+
 * {
   box-sizing: border-box;
 }

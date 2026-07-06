@@ -2,32 +2,63 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { watchDividends, addDividend, deleteDividend } from "@/lib/firestore";
-import type { Dividend } from "@/lib/types";
+import {
+  watchDividends,
+  addDividend,
+  deleteDividend,
+  watchHoldings,
+  watchTransactions,
+  quantityHeldAsOf,
+} from "@/lib/firestore";
+import type { Dividend, Holding, Transaction } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
-import { Modal, FormInput, SubmitButton } from "@/components/Modal";
+import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatThaiDate } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 import { useLanguage } from "@/lib/i18n";
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export default function DividendsPage() {
   const { user } = useAuth();
   const { formatMoney } = useCurrencyDisplay();
   const { t, language } = useLanguage();
-  const [dividends, setDividends] = useState<Dividend[]>([]);
+  const [allDividends, setAllDividends] = useState<Dividend[]>([]);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     symbol: "",
     exDate: "",
-    paymentDate: new Date().toISOString().slice(0, 10),
+    paymentDate: todayIso(),
     amountPerShare: "",
-    totalAmount: "",
   });
 
   useEffect(() => {
     if (!user) return;
-    return watchDividends(user.uid, setDividends);
+    const unsub1 = watchDividends(user.uid, setAllDividends);
+    const unsub2 = watchHoldings(user.uid, setHoldings);
+    const unsub3 = watchTransactions(user.uid, setTransactions);
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+    };
   }, [user]);
+
+  const heldSymbols = useMemo(
+    () => Array.from(new Set(holdings.map((h) => h.symbol))).sort(),
+    [holdings]
+  );
+
+  // Only already-paid dividends are shown — future/pending ones stay hidden
+  // until their payment date actually arrives.
+  const dividends = useMemo(
+    () => allDividends.filter((d) => d.paymentDate <= todayIso()),
+    [allDividends]
+  );
 
   const ytdTotal = useMemo(() => {
     const year = new Date().getFullYear();
@@ -62,22 +93,29 @@ export default function DividendsPage() {
     "dividends.monthDec",
   ];
 
+  const previewQuantity = form.symbol
+    ? quantityHeldAsOf(transactions, form.symbol, form.exDate || form.paymentDate)
+    : 0;
+  const previewTotal = previewQuantity * (parseFloat(form.amountPerShare) || 0);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !form.symbol) return;
+    const asOfDate = form.exDate || form.paymentDate;
+    const quantity = quantityHeldAsOf(transactions, form.symbol, asOfDate);
+    const amountPerShare = parseFloat(form.amountPerShare) || 0;
     await addDividend(user.uid, {
-      symbol: form.symbol.toUpperCase(),
+      symbol: form.symbol,
       exDate: form.exDate,
       paymentDate: form.paymentDate,
-      amountPerShare: parseFloat(form.amountPerShare) || 0,
-      totalAmount: parseFloat(form.totalAmount) || 0,
+      amountPerShare,
+      totalAmount: quantity * amountPerShare,
     });
     setForm({
       symbol: "",
       exDate: "",
-      paymentDate: new Date().toISOString().slice(0, 10),
+      paymentDate: todayIso(),
       amountPerShare: "",
-      totalAmount: "",
     });
     setOpen(false);
   }
@@ -167,18 +205,38 @@ export default function DividendsPage() {
 
       <Modal open={open} onClose={() => setOpen(false)} title={t("dividends.saveModalTitle")}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <FormInput
-            label={t("dividends.symbolLabel")}
-            required
-            value={form.symbol}
-            onChange={(e) => setForm({ ...form, symbol: e.target.value })}
-          />
-          <FormInput
-            label={t("dividends.exDateLabel")}
-            type="date"
-            value={form.exDate}
-            onChange={(e) => setForm({ ...form, exDate: e.target.value })}
-          />
+          {heldSymbols.length === 0 ? (
+            <div className="text-xs text-center py-3" style={{ color: "var(--muted)" }}>
+              {t("dividends.noHoldings")}
+            </div>
+          ) : (
+            <FormSelect
+              label={t("dividends.symbolLabel")}
+              required
+              value={form.symbol}
+              onChange={(e) => setForm({ ...form, symbol: e.target.value })}
+            >
+              <option value="" disabled>
+                {t("dividends.symbolSelectPlaceholder")}
+              </option>
+              {heldSymbols.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </FormSelect>
+          )}
+          <div>
+            <FormInput
+              label={t("dividends.exDateLabel")}
+              type="date"
+              value={form.exDate}
+              onChange={(e) => setForm({ ...form, exDate: e.target.value })}
+            />
+            <div className="text-[11px] mt-1" style={{ color: "var(--muted)" }}>
+              {t("dividends.exDateHelp")}
+            </div>
+          </div>
           <FormInput
             label={t("dividends.paymentDateLabel")}
             type="date"
@@ -190,18 +248,19 @@ export default function DividendsPage() {
             label={t("dividends.amountPerShareLabel")}
             type="number"
             step="any"
+            required
             value={form.amountPerShare}
             onChange={(e) => setForm({ ...form, amountPerShare: e.target.value })}
           />
-          <FormInput
-            label={t("dividends.totalAmountLabel")}
-            type="number"
-            step="any"
-            required
-            value={form.totalAmount}
-            onChange={(e) => setForm({ ...form, totalAmount: e.target.value })}
-          />
-          <SubmitButton>{t("dividends.save")}</SubmitButton>
+          {form.symbol && (
+            <div className="text-[11px]" style={{ color: "var(--muted)" }}>
+              {t("dividends.computedTotal", {
+                quantity: previewQuantity,
+                amount: formatMoney(previewTotal),
+              })}
+            </div>
+          )}
+          <SubmitButton disabled={heldSymbols.length === 0}>{t("dividends.save")}</SubmitButton>
         </form>
       </Modal>
     </div>

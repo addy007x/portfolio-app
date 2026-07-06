@@ -511,6 +511,20 @@ export function computeHoldingStats(transactions: Transaction[]): HoldingStats {
   };
 }
 
+// Quantity actually held as of a given date, derived from the buy/sell
+// transaction history for that symbol — this is what a dividend payout
+// should be multiplied against, not today's holding quantity, since shares
+// may have been bought or sold between the ex-date and now.
+export function quantityHeldAsOf(
+  transactions: Transaction[],
+  symbol: string,
+  asOfDate: string
+): number {
+  return computeHoldingStats(
+    transactions.filter((t) => t.symbol === symbol && t.date <= asOfDate)
+  ).quantity;
+}
+
 export function computeAllocation(
   holdings: Holding[],
   language: "th" | "en" = "th"

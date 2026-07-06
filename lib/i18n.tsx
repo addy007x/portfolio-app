@@ -225,8 +225,20 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "dividends.symbolLabel": { th: "สัญลักษณ์ (Symbol)", en: "Symbol" },
   "dividends.exDateLabel": { th: "วันขึ้นเครื่องหมาย (Ex-date)", en: "Ex-dividend date" },
   "dividends.paymentDateLabel": { th: "วันจ่ายเงินปันผล", en: "Payment date" },
+  "dividends.exDateHelp": {
+    th: "ใช้กำหนดจำนวนหน่วยที่ถือ ณ วันนั้น สำหรับคำนวณเงินปันผลรวม",
+    en: "Used to determine the units held on that date, for computing the total payout",
+  },
   "dividends.amountPerShareLabel": { th: "เงินปันผล/หน่วย", en: "Dividend per unit" },
-  "dividends.totalAmountLabel": { th: "จำนวนเงินรวม (บาท)", en: "Total amount (THB)" },
+  "dividends.symbolSelectPlaceholder": { th: "เลือกหุ้นที่ถืออยู่", en: "Select a stock you hold" },
+  "dividends.computedTotal": {
+    th: "คำนวณจาก {quantity} หน่วยที่ถือ ณ วันที่กำหนด = {amount}",
+    en: "Calculated from {quantity} units held as of that date = {amount}",
+  },
+  "dividends.noHoldings": {
+    th: "ยังไม่มีหุ้นถืออยู่ในพอร์ต — ไปที่หน้า Portfolio เพื่อเพิ่มก่อน",
+    en: "No stocks held yet — add one on the Portfolio page first",
+  },
   "dividends.save": { th: "บันทึก", en: "Save" },
   "dividends.monthJan": { th: "ม.ค.", en: "Jan" },
   "dividends.monthFeb": { th: "ก.พ.", en: "Feb" },
