@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import {
   watchDividends,
   addDividend,
+  updateDividend,
   deleteDividend,
   watchHoldings,
   watchTransactions,
@@ -16,6 +17,7 @@ import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatThaiDate } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 import { useLanguage } from "@/lib/i18n";
+import { fetchDividendHistory, type DividendEvent } from "@/lib/priceFeed";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -52,6 +54,110 @@ export default function DividendsPage() {
     () => Array.from(new Set(holdings.map((h) => h.symbol))).sort(),
     [holdings]
   );
+
+  const dividendEligibleKey = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          holdings
+            .filter((h) => h.assetClass === "foreign_stock" || h.assetClass === "etf")
+            .map((h) => h.symbol.toUpperCase())
+        )
+      )
+        .sort()
+        .join(","),
+    [holdings]
+  );
+
+  // Fetches Yahoo Finance's real dividend history once per change to the
+  // set of eligible symbols (th_stock has no free data source, so it stays
+  // manual-only — same limitation as live prices).
+  const [dividendHistory, setDividendHistory] = useState<Record<string, DividendEvent[]>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const symbols = dividendEligibleKey ? dividendEligibleKey.split(",") : [];
+    fetchDividendHistory(symbols).then((history) => {
+      if (!cancelled) setDividendHistory(history);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dividendEligibleKey]);
+
+  // Refs so the sync below can read the latest transactions/dividends
+  // without depending on them directly — depending on `allDividends` would
+  // make the effect re-fire on every write it makes itself, and since each
+  // pass is a sequence of awaited Firestore calls, an overlapping second
+  // pass (started before the first's writes had propagated back through
+  // the onSnapshot listener) would see the same "not yet present" state and
+  // duplicate every insert.
+  const transactionsRef = useRef(transactions);
+  useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
+  const allDividendsRef = useRef(allDividends);
+  useEffect(() => {
+    allDividendsRef.current = allDividends;
+  }, [allDividends]);
+
+  // The guard below still isn't enough on its own to stop duplicates within
+  // a single pass (every add is only reflected in allDividendsRef once its
+  // onSnapshot round-trip completes, which is slower than the loop), so a
+  // locally-tracked set doubles as the source of truth for "already
+  // handled in this pass" as the loop adds things.
+  const dividendSyncInProgress = useRef(false);
+
+  // Keeps foreign stock/ETF dividends in sync with Yahoo Finance's real
+  // dividend history (th_stock has no free data source, so it stays
+  // manual-only — same limitation as live prices). Only touches rows this
+  // sync itself created (source: "auto"), so a manually-entered record for
+  // the same ex-date is never overwritten. Runs once per fetched
+  // `dividendHistory` (i.e. once per change to the eligible symbol set),
+  // not on every dividend/transaction change.
+  useEffect(() => {
+    const symbols = Object.keys(dividendHistory);
+    if (!user || symbols.length === 0 || dividendSyncInProgress.current) return;
+    dividendSyncInProgress.current = true;
+    (async () => {
+      try {
+        const seen = new Set(allDividendsRef.current.map((d) => `${d.symbol}|${d.exDate}`));
+        for (const symbol of symbols) {
+          for (const ev of dividendHistory[symbol]) {
+            const quantity = quantityHeldAsOf(transactionsRef.current, symbol, ev.exDate);
+            if (quantity <= 0) continue; // not held yet as of this ex-date
+            const totalAmount = quantity * ev.amountPerShare;
+            const key = `${symbol}|${ev.exDate}`;
+            if (!seen.has(key)) {
+              await addDividend(user.uid, {
+                symbol,
+                exDate: ev.exDate,
+                paymentDate: ev.exDate,
+                amountPerShare: ev.amountPerShare,
+                totalAmount,
+                source: "auto",
+              });
+              seen.add(key);
+              continue;
+            }
+            const existing = allDividendsRef.current.find(
+              (d) => d.symbol === symbol && d.exDate === ev.exDate
+            );
+            if (
+              existing?.source === "auto" &&
+              (existing.amountPerShare !== ev.amountPerShare || existing.totalAmount !== totalAmount)
+            ) {
+              await updateDividend(user.uid, existing.id, {
+                amountPerShare: ev.amountPerShare,
+                totalAmount,
+              });
+            }
+          }
+        }
+      } finally {
+        dividendSyncInProgress.current = false;
+      }
+    })();
+  }, [user, dividendHistory]);
 
   // Only already-paid dividends are shown — future/pending ones stay hidden
   // until their payment date actually arrives.
@@ -131,6 +237,10 @@ export default function DividendsPage() {
         >
           <Icon name="add" style={{ fontSize: 22, color: "#04120c" }} />
         </button>
+      </div>
+
+      <div className="text-[11px] mb-3" style={{ color: "var(--muted)" }}>
+        {t("dividends.autoSyncNote")}
       </div>
 
       <Card>

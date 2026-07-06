@@ -92,6 +92,11 @@ export interface Dividend {
   paymentDate: string;
   amountPerShare: number;
   totalAmount: number;
+  // Present ("auto") on records created by the background sync from Yahoo
+  // Finance's dividend history; absent on manually-entered records, so the
+  // sync knows which rows it's allowed to overwrite on re-sync without
+  // clobbering something the user typed in by hand.
+  source?: "auto";
 }
 
 export interface Portfolio {

@@ -32,11 +32,34 @@ export async function fetchFxRateToThb(currency: string): Promise<number> {
   }
 }
 
+export interface DividendEvent {
+  exDate: string;
+  amountPerShare: number;
+}
+
 interface PricesResponse {
   crypto: Record<string, number | null>;
   cryptoIcons: Record<string, string | null>;
   stocks: Record<string, number | null>;
   fx: Record<string, number | null>;
+  dividends?: Record<string, DividendEvent[]>;
+}
+
+// Real historical ex-dividend dates + per-share amounts for foreign
+// stocks/ETFs (th_stock has no free data source, same limitation as live
+// prices — see isLivePriceEligible below).
+export async function fetchDividendHistory(
+  symbols: string[]
+): Promise<Record<string, DividendEvent[]>> {
+  if (symbols.length === 0) return {};
+  try {
+    const res = await fetch(`/api/prices?dividendStocks=${symbols.join(",")}`);
+    if (!res.ok) return {};
+    const data: PricesResponse = await res.json();
+    return data.dividends ?? {};
+  } catch {
+    return {};
+  }
 }
 
 // Used by Earn (and anywhere else showing raw crypto quotes/logos rather

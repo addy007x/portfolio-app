@@ -72,6 +72,10 @@ export async function GET(req: NextRequest) {
     .split(",")
     .map((s) => s.trim().toUpperCase())
     .filter((c) => FX_CODES.has(c));
+  const dividendStockSymbols = (searchParams.get("dividendStocks") ?? "")
+    .split(",")
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
 
   const crypto: Record<string, number | null> = {};
   const cryptoIcons: Record<string, string | null> = {};
@@ -160,5 +164,37 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  return Response.json({ crypto, cryptoIcons, stocks, fx });
+  // ---- Dividend history for foreign stocks/ETFs, via Yahoo Finance's
+  // chart "events=div" data. Only the ex-dividend date and per-share amount
+  // are available for free here — Yahoo doesn't expose the actual payment
+  // date on this endpoint, so callers treat the ex-date as the best free
+  // approximation of when the payout lands.
+  const dividends: Record<string, Array<{ exDate: string; amountPerShare: number }>> = {};
+  if (dividendStockSymbols.length) {
+    await Promise.all(
+      dividendStockSymbols.map(async (sym) => {
+        try {
+          const data = await fetchJson(
+            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?events=div&range=10y&interval=1mo`,
+            { headers: { "User-Agent": "Mozilla/5.0" } }
+          );
+          const events = data?.chart?.result?.[0]?.events?.dividends as
+            | Record<string, { amount: number; date: number }>
+            | undefined;
+          dividends[sym] = events
+            ? Object.values(events)
+                .map((e) => ({
+                  exDate: new Date(e.date * 1000).toISOString().slice(0, 10),
+                  amountPerShare: e.amount,
+                }))
+                .sort((a, b) => a.exDate.localeCompare(b.exDate))
+            : [];
+        } catch {
+          dividends[sym] = [];
+        }
+      })
+    );
+  }
+
+  return Response.json({ crypto, cryptoIcons, stocks, fx, dividends });
 }

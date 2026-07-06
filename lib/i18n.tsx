@@ -239,6 +239,10 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
     th: "ยังไม่มีหุ้นถืออยู่ในพอร์ต — ไปที่หน้า Portfolio เพื่อเพิ่มก่อน",
     en: "No stocks held yet — add one on the Portfolio page first",
   },
+  "dividends.autoSyncNote": {
+    th: "หุ้นต่างประเทศ/ETF จะดึงประวัติเงินปันผลจากอินเทอร์เน็ตอัตโนมัติ หากมีการเปลี่ยนแปลงจะอัปเดตให้เอง ส่วนหุ้นไทยต้องเพิ่มเอง (ยังไม่มีแหล่งข้อมูลฟรี)",
+    en: "Foreign stocks/ETFs auto-sync their dividend history from the internet and update automatically if it changes. Thai stocks still need manual entry (no free data source yet).",
+  },
   "dividends.save": { th: "บันทึก", en: "Save" },
   "dividends.monthJan": { th: "ม.ค.", en: "Jan" },
   "dividends.monthFeb": { th: "ก.พ.", en: "Feb" },

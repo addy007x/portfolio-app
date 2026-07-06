@@ -107,6 +107,14 @@ export async function addDividend(uid: string, data: Omit<Dividend, "id">) {
   await addDoc(userCollection(uid, "dividends"), data);
 }
 
+export async function updateDividend(
+  uid: string,
+  id: string,
+  data: Partial<Omit<Dividend, "id">>
+) {
+  await updateDoc(doc(db, "users", uid, "dividends", id), data);
+}
+
 export async function deleteDividend(uid: string, id: string) {
   await deleteDoc(doc(db, "users", uid, "dividends", id));
 }
