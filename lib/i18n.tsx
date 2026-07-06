@@ -36,6 +36,9 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "common.add": { th: "เพิ่ม", en: "Add" },
   "common.comingSoon": { th: "เร็วๆ นี้", en: "Coming soon" },
   "common.saveChanges": { th: "บันทึกการแก้ไข", en: "Save changes" },
+  "common.previous": { th: "ก่อนหน้า", en: "Previous" },
+  "common.next": { th: "ถัดไป", en: "Next" },
+  "common.pageIndicator": { th: "หน้า {page} จาก {total}", en: "Page {page} of {total}" },
 
   // Dashboard
   "dashboard.title": { th: "Dashboard", en: "Dashboard" },

@@ -23,6 +23,8 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+const PAGE_SIZE = 7;
+
 export default function DividendsPage() {
   const { user } = useAuth();
   const { formatMoney } = useCurrencyDisplay();
@@ -173,6 +175,14 @@ export default function DividendsPage() {
     [allDividends]
   );
 
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(dividends.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, totalPages - 1);
+  const pagedDividends = dividends.slice(
+    clampedPage * PAGE_SIZE,
+    clampedPage * PAGE_SIZE + PAGE_SIZE
+  );
+
   const ytdTotal = useMemo(() => {
     const year = new Date().getFullYear();
     return dividends
@@ -290,7 +300,7 @@ export default function DividendsPage() {
             {t("dividends.emptyHistory")}
           </div>
         )}
-        {dividends.map((d) => (
+        {pagedDividends.map((d) => (
           <Card key={d.id} className="!p-3.5">
             <div className="flex items-center gap-3">
               <div
@@ -319,6 +329,38 @@ export default function DividendsPage() {
           </Card>
         ))}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-3">
+          <button
+            onClick={() => setPage(clampedPage - 1)}
+            disabled={clampedPage === 0}
+            className="px-3 py-1.5 rounded-[10px] text-xs font-semibold"
+            style={{
+              background: "var(--surface2)",
+              color: clampedPage === 0 ? "var(--muted)" : "var(--text)",
+              opacity: clampedPage === 0 ? 0.5 : 1,
+            }}
+          >
+            {t("common.previous")}
+          </button>
+          <div className="text-[11px]" style={{ color: "var(--muted)" }}>
+            {t("common.pageIndicator", { page: clampedPage + 1, total: totalPages })}
+          </div>
+          <button
+            onClick={() => setPage(clampedPage + 1)}
+            disabled={clampedPage >= totalPages - 1}
+            className="px-3 py-1.5 rounded-[10px] text-xs font-semibold"
+            style={{
+              background: "var(--surface2)",
+              color: clampedPage >= totalPages - 1 ? "var(--muted)" : "var(--text)",
+              opacity: clampedPage >= totalPages - 1 ? 0.5 : 1,
+            }}
+          >
+            {t("common.next")}
+          </button>
+        </div>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title={t("dividends.saveModalTitle")}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
