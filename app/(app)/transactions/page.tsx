@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import {
   watchTransactions,
   watchHoldings,
+  watchEarnPositions,
   addTransaction,
   updateTransaction,
   deleteTransaction,
@@ -12,8 +13,10 @@ import {
   updateHolding,
   computeHoldingStats,
   belongsToPortfolio,
+  earnPositionValue,
+  computeDailyInterest,
 } from "@/lib/firestore";
-import type { Transaction, TransactionType, Holding, AssetClass } from "@/lib/types";
+import type { Transaction, TransactionType, Holding, AssetClass, EarnPosition } from "@/lib/types";
 import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { AssetIcon } from "@/components/AssetIcon";
@@ -45,7 +48,7 @@ const TYPE_ICON: Record<TransactionType, string> = {
   dividend: "paid",
 };
 
-const FILTERS: Array<"all" | TransactionType> = ["all", "buy", "sell", "transfer", "dividend"];
+const FILTERS: Array<"all" | TransactionType | "earn"> = ["all", "buy", "sell", "dividend", "earn"];
 
 const EMPTY_FORM = {
   date: new Date().toISOString().slice(0, 10),
@@ -60,11 +63,13 @@ const EMPTY_FORM = {
 
 export default function TransactionsPage() {
   const { user } = useAuth();
-  const { formatMoney } = useCurrencyDisplay();
+  const { formatMoney, formatSignedMoney } = useCurrencyDisplay();
   const { currentPortfolioId, defaultPortfolioId } = usePortfolios();
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
-  const [filter, setFilter] = useState<"all" | TransactionType>("all");
+  const [earnPositions, setEarnPositions] = useState<EarnPosition[]>([]);
+  const [filter, setFilter] = useState<"all" | TransactionType | "earn">("all");
+  const [expandedEarnId, setExpandedEarnId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [originalSymbol, setOriginalSymbol] = useState<string | null>(null);
@@ -75,9 +80,11 @@ export default function TransactionsPage() {
     if (!user) return;
     const unsub1 = watchTransactions(user.uid, setAllTransactions);
     const unsub2 = watchHoldings(user.uid, setAllHoldings);
+    const unsub3 = watchEarnPositions(user.uid, setEarnPositions);
     return () => {
       unsub1();
       unsub2();
+      unsub3();
     };
   }, [user]);
 
@@ -230,11 +237,80 @@ export default function TransactionsPage() {
               color: filter === f ? "#04120c" : "var(--text)",
             }}
           >
-            {f === "all" ? "ทั้งหมด" : TYPE_LABEL[f]}
+            {f === "all" ? "ทั้งหมด" : f === "earn" ? "Earn" : TYPE_LABEL[f]}
           </button>
         ))}
       </div>
 
+      {filter === "earn" ? (
+        <div className="flex flex-col gap-2.5">
+          {earnPositions.length === 0 && (
+            <div className="text-sm text-center py-8" style={{ color: "var(--muted)" }}>
+              ยังไม่มีประวัติ Earn — ไปที่หน้า Earn เพื่อเริ่มเพิ่มรายการ
+            </div>
+          )}
+          {earnPositions.map((p) => {
+            const expanded = expandedEarnId === p.id;
+            const value = earnPositionValue(p);
+            const gain = value - p.principal;
+            const daily = computeDailyInterest(p);
+            return (
+              <Card key={p.id} className="!p-3.5">
+                <div
+                  className="flex items-center gap-3"
+                  onClick={() => setExpandedEarnId(expanded ? null : p.id)}
+                >
+                  <div
+                    className="w-9 h-9 rounded-[11px] flex items-center justify-center flex-none overflow-hidden"
+                    style={{ background: "var(--pal-crypto)22" }}
+                  >
+                    <AssetIcon symbol={p.symbol} assetClass="crypto" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold truncate">เริ่ม Earn {p.symbol}</div>
+                    <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
+                      {formatThaiDate(p.startDate)} · {p.apy}% APY · ต้นทุน {formatMoney(p.principal)}
+                    </div>
+                  </div>
+                  <div className="text-right flex-none">
+                    <div className="text-sm font-bold">{formatMoney(value)}</div>
+                    <div className="text-[11px] font-semibold" style={{ color: "var(--up)" }}>
+                      {formatSignedMoney(gain)}
+                    </div>
+                  </div>
+                  <Icon
+                    name={expanded ? "expand_less" : "expand_more"}
+                    style={{ fontSize: 20, color: "var(--muted)" }}
+                  />
+                </div>
+
+                {expanded && (
+                  <div className="mt-3.5 pt-3.5" style={{ borderTop: "var(--card-border)" }}>
+                    <div className="text-xs font-bold mb-2" style={{ color: "var(--muted)" }}>
+                      ดอกเบี้ยรายวัน
+                    </div>
+                    {daily.length === 0 && (
+                      <div className="text-xs text-center py-2" style={{ color: "var(--muted)" }}>
+                        ยังไม่มีวันที่คำนวณดอกเบี้ยได้
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1.5">
+                      {daily.map((d) => (
+                        <div key={d.date} className="flex justify-between text-xs">
+                          <span style={{ color: "var(--muted)" }}>{formatThaiDate(d.date)}</span>
+                          <span className="font-semibold" style={{ color: "var(--up)" }}>
+                            {formatSignedMoney(d.interest)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
       <div className="flex flex-col gap-2.5">
         {filtered.length === 0 && (
           <div className="text-sm text-center py-8" style={{ color: "var(--muted)" }}>
@@ -288,6 +364,7 @@ export default function TransactionsPage() {
           );
         })}
       </div>
+      )}
 
       <Modal
         open={open}

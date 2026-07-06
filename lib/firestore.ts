@@ -233,6 +233,37 @@ export function earnPositionValue(p: EarnPosition, asOf: Date = new Date()): num
   return p.principal * Math.pow(1 + dailyRate, days);
 }
 
+export interface DailyInterest {
+  date: string; // YYYY-MM-DD
+  interest: number; // THB credited that calendar day
+}
+
+// Interest earned on each of the last `days` calendar days (fewer if the
+// position started more recently), derived from the same compounding
+// formula rather than a stored ledger — value(day) minus value(day - 1).
+// On the deposit's first day, the baseline is the principal itself (not 0),
+// so that day shows the actual interest accrued rather than the whole
+// deposit misleadingly appearing as "interest".
+export function computeDailyInterest(
+  p: EarnPosition,
+  days = 14,
+  asOf: Date = new Date()
+): DailyInterest[] {
+  const start = new Date(p.startDate);
+  const result: DailyInterest[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const dayEnd = new Date(asOf);
+    dayEnd.setDate(dayEnd.getDate() - i);
+    if (dayEnd < start) continue;
+    const dayStart = new Date(dayEnd);
+    dayStart.setDate(dayStart.getDate() - 1);
+    const baseline = dayStart < start ? p.principal : earnPositionValue(p, dayStart);
+    const interest = earnPositionValue(p, dayEnd) - baseline;
+    result.push({ date: dayEnd.toISOString().slice(0, 10), interest });
+  }
+  return result;
+}
+
 export interface EarnSummary {
   totalValue: number;
   totalPrincipal: number;
