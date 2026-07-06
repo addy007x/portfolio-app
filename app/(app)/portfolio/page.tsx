@@ -9,6 +9,7 @@ import {
   deleteHolding,
   computePortfolioSummary,
   belongsToPortfolio,
+  findSymbolPortfolioConflict,
 } from "@/lib/firestore";
 import type { Holding, AssetClass } from "@/lib/types";
 import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
@@ -30,7 +31,7 @@ const ASSET_CLASSES: AssetClass[] = [
 export default function PortfolioPage() {
   const { user } = useAuth();
   const { formatMoney } = useCurrencyDisplay();
-  const { currentPortfolioId, defaultPortfolioId } = usePortfolios();
+  const { portfolios, currentPortfolioId, defaultPortfolioId } = usePortfolios();
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -39,6 +40,7 @@ export default function PortfolioPage() {
     assetClass: "th_stock" as AssetClass,
   });
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -52,34 +54,56 @@ export default function PortfolioPage() {
 
   function openAdd() {
     setEditingId(null);
+    setError(null);
     setForm({ symbol: "", assetClass: "th_stock" });
     setOpen(true);
   }
 
   function openEdit(h: Holding) {
     setEditingId(h.id);
+    setError(null);
     setForm({ symbol: h.symbol, assetClass: h.assetClass });
     setOpen(true);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !currentPortfolioId) return;
+    setError(null);
     setSubmitting(true);
     try {
       if (editingId) {
         await updateHolding(user.uid, editingId, { assetClass: form.assetClass });
       } else {
         const symbol = form.symbol.toUpperCase();
-        await addHolding(user.uid, {
+        const conflictPortfolioId = findSymbolPortfolioConflict(
+          allHoldings,
           symbol,
-          name: symbol,
-          assetClass: form.assetClass,
-          quantity: 0,
-          avgCost: 0,
-          currentPrice: 0,
-          ...(currentPortfolioId ? { portfolioId: currentPortfolioId } : {}),
-        });
+          currentPortfolioId,
+          defaultPortfolioId
+        );
+        if (conflictPortfolioId) {
+          const name = portfolios.find((p) => p.id === conflictPortfolioId)?.name ?? "พอร์ตอื่น";
+          setError(`${symbol} อยู่ในพอร์ต "${name}" อยู่แล้ว ต้องลบออกจากพอร์ตนั้นก่อนถึงจะเพิ่มที่นี่ได้`);
+          return;
+        }
+        // If this symbol already exists (e.g. it was just removed from
+        // another portfolio), reassign that holding instead of creating a
+        // blank duplicate — it keeps its quantity/cost basis intact.
+        const existing = allHoldings.find((h) => h.symbol.toUpperCase() === symbol);
+        if (existing) {
+          await updateHolding(user.uid, existing.id, { portfolioId: currentPortfolioId });
+        } else {
+          await addHolding(user.uid, {
+            symbol,
+            name: symbol,
+            assetClass: form.assetClass,
+            quantity: 0,
+            avgCost: 0,
+            currentPrice: 0,
+            portfolioId: currentPortfolioId,
+          });
+        }
       }
       setForm({ symbol: "", assetClass: "th_stock" });
       setEditingId(null);
@@ -219,6 +243,15 @@ export default function PortfolioPage() {
               </div>
             )}
           </div>
+
+          {error && (
+            <div
+              className="text-xs rounded-[10px] px-3 py-2"
+              style={{ background: "var(--down)22", color: "var(--down)" }}
+            >
+              {error}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <button

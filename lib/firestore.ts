@@ -131,6 +131,20 @@ export async function deletePortfolio(uid: string, id: string) {
   await deleteDoc(doc(db, "users", uid, "portfolios", id));
 }
 
+export async function updatePortfolio(
+  uid: string,
+  id: string,
+  data: Partial<Omit<Portfolio, "id">>
+) {
+  await updateDoc(doc(db, "users", uid, "portfolios", id), data);
+}
+
+// Sentinel for a holding explicitly detached from a portfolio via "remove
+// from portfolio" — distinct from `undefined` (never tagged / legacy data),
+// which falls back to the account's default portfolio. An unassigned
+// holding matches no portfolio at all until the user re-adds it somewhere.
+export const UNASSIGNED_PORTFOLIO_ID = "__unassigned__";
+
 // A holding/transaction created before multi-portfolio support has no
 // portfolioId at all; treat those as living in the account's original
 // (default) portfolio rather than making them vanish from every view.
@@ -140,8 +154,28 @@ export function belongsToPortfolio(
   defaultPortfolioId: string | null
 ): boolean {
   if (!currentPortfolioId) return true;
+  if (item.portfolioId === UNASSIGNED_PORTFOLIO_ID) return false;
   const effectiveId = item.portfolioId ?? defaultPortfolioId;
   return effectiveId === currentPortfolioId;
+}
+
+// A symbol may only live in one portfolio at a time. Returns the id of the
+// portfolio it's already in if adding it to `targetPortfolioId` would create
+// a duplicate elsewhere, or null if there's no conflict (including when the
+// existing holding has been explicitly removed from its portfolio already).
+export function findSymbolPortfolioConflict(
+  holdings: Holding[],
+  symbol: string,
+  targetPortfolioId: string,
+  defaultPortfolioId: string | null
+): string | null {
+  const upper = symbol.toUpperCase();
+  const existing = holdings.find((h) => h.symbol.toUpperCase() === upper);
+  if (!existing) return null;
+  if (existing.portfolioId === UNASSIGNED_PORTFOLIO_ID) return null;
+  const existingPortfolioId = existing.portfolioId ?? defaultPortfolioId;
+  if (!existingPortfolioId || existingPortfolioId === targetPortfolioId) return null;
+  return existingPortfolioId;
 }
 
 // ---- Value history (daily portfolio-value snapshots, one series per portfolio) ----

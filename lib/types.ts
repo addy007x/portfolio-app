@@ -75,6 +75,7 @@ export interface Portfolio {
   id: string;
   name: string;
   createdAtMs: number;
+  targetAmount?: number; // THB, optional goal for this portfolio's total value
 }
 
 export interface ValueSnapshot {
