@@ -190,33 +190,6 @@ export default function PortfoliosPage() {
         </div>
       )}
 
-      {unassigned.length > 0 && (
-        <Card className="!p-3.5 mb-3">
-          <div className="text-xs font-bold mb-2" style={{ color: "var(--muted)" }}>
-            สินทรัพย์ที่เอาออกจากพอร์ตแล้ว ยังไม่ได้ใส่พอร์ตใหม่
-          </div>
-          <div className="flex flex-col gap-2">
-            {unassigned.map((h) => (
-              <div key={h.id} className="flex items-center gap-2.5">
-                <div
-                  className="w-7 h-7 rounded-[9px] flex items-center justify-center flex-none overflow-hidden"
-                  style={{ background: "var(--surface2)" }}
-                >
-                  <AssetIcon symbol={h.symbol} assetClass={h.assetClass} iconUrl={h.iconUrl} size={15} />
-                </div>
-                <div className="flex-1 min-w-0 text-xs font-semibold truncate">{h.symbol}</div>
-                <div className="text-xs" style={{ color: "var(--muted)" }}>
-                  {formatMoney(h.quantity * h.currentPrice)}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="text-[11px] mt-2" style={{ color: "var(--muted)" }}>
-            เปิด &quot;+ เพิ่มสินทรัพย์ในพอร์ตนี้&quot; ที่พอร์ตที่ต้องการ แล้วเลือกจากรายการนี้เพื่อใส่กลับเข้าไป
-          </div>
-        </Card>
-      )}
-
       <div className="flex flex-col gap-2.5">
         {portfolios.map((p) => {
           const active = p.id === currentPortfolioId;
