@@ -48,6 +48,7 @@ export default function EarnPage() {
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
   const [editing, setEditing] = useState<EarnPosition | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editFormError, setEditFormError] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     apy: "",
     quantity: "",
@@ -94,6 +95,7 @@ export default function EarnPage() {
 
   function openEdit(p: EarnPosition) {
     setEditing(p);
+    setEditFormError(null);
     setEditForm({
       apy: String(p.apy),
       quantity: String(p.quantity),
@@ -105,12 +107,22 @@ export default function EarnPage() {
   async function handleEditSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!user || !editing) return;
+    setEditFormError(null);
+    const costBasisPrice = parseFloat(editForm.costBasisPrice) || 0;
+    // Without a valid cost basis, priceFor() falls back to this value and
+    // silently prices the position at ฿0 whenever a live quote isn't
+    // available yet (e.g. right after navigating to a page) — that's what
+    // was showing daily interest as "≈฿0" despite a real coin amount.
+    if (costBasisPrice <= 0) {
+      setEditFormError(t("earn.invalidCostBasis"));
+      return;
+    }
     setEditSubmitting(true);
     try {
       await updateEarnPosition(user.uid, editing.id, {
         apy: parseFloat(editForm.apy) || 0,
         quantity: parseFloat(editForm.quantity) || 0,
-        costBasisPrice: parseFloat(editForm.costBasisPrice) || 0,
+        costBasisPrice,
         startDate: editForm.startDate,
       });
       setEditing(null);
@@ -336,7 +348,11 @@ export default function EarnPage() {
         </form>
       </Modal>
 
-      <Modal open={!!editing} onClose={() => setEditing(null)} title={`${t("earn.editTitle")} ${editing?.symbol ?? ""}`}>
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={`${t("earn.editTitle")} ${editing?.symbol ?? ""}`}
+      >
         <form onSubmit={handleEditSubmit} className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-3">
             <FormInput
@@ -373,6 +389,14 @@ export default function EarnPage() {
               onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
             />
           </div>
+          {editFormError && (
+            <div
+              className="text-xs rounded-[10px] px-3 py-2"
+              style={{ background: "var(--down)22", color: "var(--down)" }}
+            >
+              {editFormError}
+            </div>
+          )}
           <div className="text-[11px]" style={{ color: "var(--muted)" }}>
             {t("earn.editHelp")}
           </div>

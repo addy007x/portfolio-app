@@ -217,6 +217,10 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
     th: "ไม่พบราคาตลาดของ {symbol} กรุณาตรวจสอบสัญลักษณ์อีกครั้ง",
     en: "No market price found for {symbol}. Please double-check the symbol.",
   },
+  "earn.invalidCostBasis": {
+    th: "ราคาต้นทุนต้องมากกว่า 0 ไม่เช่นนั้นจะคำนวณมูลค่าเป็นเงินบาทไม่ได้",
+    en: "Cost basis must be greater than 0, or the THB value can't be calculated.",
+  },
 
   // Dividends
   "dividends.title": { th: "เงินปันผล", en: "Dividends" },
