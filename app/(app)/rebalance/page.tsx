@@ -9,7 +9,7 @@ import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR, ASSET_CLASS_ICON } from "@/lib/ty
 import {
   REBALANCE_STRATEGIES,
   getStrategyWeights,
-  computeRebalance,
+  computeCashFlowRebalance,
   type RebalanceStrategyId,
 } from "@/lib/rebalance";
 import { Card, Icon } from "@/components/Card";
@@ -23,6 +23,7 @@ export default function RebalancePage() {
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [strategyId, setStrategyId] = useState<RebalanceStrategyId>("moderate");
   const [age, setAge] = useState("30");
+  const [contribution, setContribution] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -35,11 +36,16 @@ export default function RebalancePage() {
 
   const strategy = REBALANCE_STRATEGIES.find((s) => s.id === strategyId) ?? REBALANCE_STRATEGIES[1];
   const weights = getStrategyWeights(strategyId, parseInt(age, 10) || 0);
-  const { rows, totalValue } = computeRebalance(holdings, weights);
+  const contributionAmount = parseFloat(contribution) || 0;
+  const { rows, totalValue } = computeCashFlowRebalance(holdings, weights, contributionAmount);
 
   return (
     <div style={{ animation: "scin 0.3s ease both" }}>
-      <div className="text-[26px] font-extrabold tracking-tight mb-4 mt-1">ปรับสมดุลพอร์ต</div>
+      <div className="text-[26px] font-extrabold tracking-tight mb-1 mt-1">ปรับสมดุลพอร์ต</div>
+      <div className="text-[12px] mb-4" style={{ color: "var(--muted)" }}>
+        Cash Flow Rebalancing — ไม่แนะนำให้ขายสินทรัพย์เดิม แต่จะบอกว่าเงินลงทุนใหม่ควรใส่ที่หมวดไหน
+        เพื่อให้พอร์ตค่อยๆ กลับไปสมดุลตามเป้าหมาย
+      </div>
 
       <div className="flex gap-2 overflow-x-auto mb-3 pb-1">
         {REBALANCE_STRATEGIES.map((s) => (
@@ -68,6 +74,17 @@ export default function RebalancePage() {
         </Card>
       )}
 
+      <Card className="mb-3">
+        <FormInput
+          label="เงินลงทุนใหม่ที่จะเติม (บาท)"
+          type="number"
+          step="any"
+          placeholder="เช่น 5000"
+          value={contribution}
+          onChange={(e) => setContribution(e.target.value)}
+        />
+      </Card>
+
       <div className="text-[11px] mb-3" style={{ color: "var(--muted)" }}>
         {strategy.source} — เป็นแนวทางทั่วไป ไม่ใช่คำแนะนำการลงทุนเฉพาะบุคคล โปรดพิจารณาความเสี่ยงที่รับได้ของตัวเองก่อนตัดสินใจ
       </div>
@@ -87,8 +104,7 @@ export default function RebalancePage() {
 
           <div className="flex flex-col gap-2.5 mt-3">
             {rows.map((r) => {
-              const isBuy = r.diffValue > 1;
-              const isSell = r.diffValue < -1;
+              const hasAllocation = r.allocate > 1;
               return (
                 <Card key={r.assetClass} className="!p-3.5">
                   <div className="flex items-center gap-3">
@@ -108,19 +124,13 @@ export default function RebalancePage() {
                       </div>
                     </div>
                     <div className="text-right flex-none">
-                      {isBuy && (
+                      {hasAllocation ? (
                         <div className="text-xs font-bold" style={{ color: "var(--up)" }}>
-                          ซื้อเพิ่ม {formatMoney(r.diffValue)}
+                          + {formatMoney(r.allocate)}
                         </div>
-                      )}
-                      {isSell && (
-                        <div className="text-xs font-bold" style={{ color: "var(--down)" }}>
-                          ขายออก {formatMoney(-r.diffValue)}
-                        </div>
-                      )}
-                      {!isBuy && !isSell && (
+                      ) : (
                         <div className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
-                          สมดุลแล้ว
+                          {contributionAmount > 0 ? "ไม่ต้องเพิ่ม" : "—"}
                         </div>
                       )}
                     </div>

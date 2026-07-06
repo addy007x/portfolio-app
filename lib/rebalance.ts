@@ -59,21 +59,33 @@ export function getStrategyWeights(id: RebalanceStrategyId, age: number): Record
   return id === "age" ? ageBasedWeights(age) : FIXED_WEIGHTS[id];
 }
 
-export interface RebalanceRow {
+export interface CashFlowRow {
   assetClass: AssetClass;
   currentValue: number;
   currentPct: number;
   targetPct: number;
-  targetValue: number;
-  diffValue: number; // targetValue - currentValue: positive = buy more, negative = sell some
+  allocate: number; // THB from the new contribution to direct into this class
 }
 
 const ASSET_CLASS_ORDER: AssetClass[] = ["th_stock", "foreign_stock", "etf", "crypto", "cash"];
 
-export function computeRebalance(
+// Cash Flow Rebalancing: never recommends selling anything. Instead, a new
+// contribution is split across asset classes proportional to how far each
+// is below its target value once that contribution is added — so the
+// portfolio drifts back toward target over time purely through where new
+// money goes, which is the whole point of the technique (avoids the taxes/
+// fees a sell-and-rebuy rebalance would trigger).
+//
+// Because target weights sum to 1, the unclamped sum of
+// (targetValueAfterContribution - currentValue) across all classes always
+// equals exactly `contribution`. Clamping negative (overweight) gaps to 0
+// before normalizing means the positive-gap sum is always >= contribution,
+// so scaling by contribution/sumGaps never allocates more than was put in.
+export function computeCashFlowRebalance(
   holdings: Array<{ assetClass: AssetClass; quantity: number; currentPrice: number }>,
-  weights: Record<AssetClass, number>
-): { rows: RebalanceRow[]; totalValue: number } {
+  weights: Record<AssetClass, number>,
+  contribution: number
+): { rows: CashFlowRow[]; totalValue: number } {
   const byClass = new Map<AssetClass, number>();
   let totalValue = 0;
   for (const h of holdings) {
@@ -81,19 +93,29 @@ export function computeRebalance(
     byClass.set(h.assetClass, (byClass.get(h.assetClass) ?? 0) + v);
     totalValue += v;
   }
-  const rows: RebalanceRow[] = ASSET_CLASS_ORDER.map((assetClass) => {
+  const totalAfter = totalValue + Math.max(0, contribution);
+
+  const gaps = ASSET_CLASS_ORDER.map((assetClass) => {
     const currentValue = byClass.get(assetClass) ?? 0;
-    const currentPct = totalValue > 0 ? (currentValue / totalValue) * 100 : 0;
-    const targetPct = (weights[assetClass] ?? 0) * 100;
-    const targetValue = totalValue * (weights[assetClass] ?? 0);
+    const targetWeight = weights[assetClass] ?? 0;
+    const targetValueAfter = totalAfter * targetWeight;
     return {
       assetClass,
       currentValue,
-      currentPct,
-      targetPct,
-      targetValue,
-      diffValue: targetValue - currentValue,
+      targetWeight,
+      gap: Math.max(0, targetValueAfter - currentValue),
     };
+  });
+  const sumGaps = gaps.reduce((s, g) => s + g.gap, 0);
+
+  const rows: CashFlowRow[] = gaps.map((g) => {
+    const currentPct = totalValue > 0 ? (g.currentValue / totalValue) * 100 : 0;
+    const targetPct = g.targetWeight * 100;
+    let allocate = 0;
+    if (contribution > 0) {
+      allocate = sumGaps > 0 ? g.gap * Math.min(1, contribution / sumGaps) : contribution * g.targetWeight;
+    }
+    return { assetClass: g.assetClass, currentValue: g.currentValue, currentPct, targetPct, allocate };
   });
   return { rows, totalValue };
 }
