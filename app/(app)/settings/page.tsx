@@ -7,14 +7,6 @@ import { updateUserProfile } from "@/lib/firestore";
 import { Card, Icon } from "@/components/Card";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 
-const MENU = [
-  { icon: "person", label: "ข้อมูลส่วนตัว" },
-  { icon: "notifications", label: "การแจ้งเตือน" },
-  { icon: "lock", label: "ความปลอดภัย" },
-  { icon: "link", label: "เชื่อมต่อบัญชี" },
-  { icon: "tune", label: "ตั้งค่าการลงทุน" },
-];
-
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
   const { currency, setCurrency } = useCurrencyDisplay();
@@ -49,22 +41,6 @@ export default function SettingsPage() {
             {user?.email}
           </div>
         </div>
-      </Card>
-
-      <Card className="mt-3 !p-0 overflow-hidden">
-        {MENU.map((m, i) => (
-          <div
-            key={m.label}
-            className="flex items-center gap-3 px-4 py-3.5"
-            style={{
-              borderBottom: i < MENU.length - 1 ? "var(--card-border)" : undefined,
-            }}
-          >
-            <Icon name={m.icon} style={{ fontSize: 20, color: "var(--muted)" }} />
-            <span className="flex-1 text-sm">{m.label}</span>
-            <Icon name="chevron_right" style={{ fontSize: 18, color: "var(--muted)" }} />
-          </div>
-        ))}
       </Card>
 
       <Card className="mt-3 !p-0 overflow-hidden">
