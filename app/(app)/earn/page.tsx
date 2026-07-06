@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import {
   watchEarnPositions,
   addEarnPosition,
+  updateEarnPosition,
   deleteEarnPosition,
   computeEarnSummary,
   groupEarnPositionsBySymbol,
@@ -42,6 +43,15 @@ export default function EarnPage() {
     quantity: "",
     startDate: new Date().toISOString().slice(0, 10),
   });
+  const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
+  const [editing, setEditing] = useState<EarnPosition | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editForm, setEditForm] = useState({
+    apy: "",
+    quantity: "",
+    costBasisPrice: "",
+    startDate: "",
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -78,6 +88,33 @@ export default function EarnPage() {
   async function handleDeleteGroup(positionIds: string[]) {
     if (!user) return;
     await Promise.all(positionIds.map((id) => deleteEarnPosition(user.uid, id)));
+  }
+
+  function openEdit(p: EarnPosition) {
+    setEditing(p);
+    setEditForm({
+      apy: String(p.apy),
+      quantity: String(p.quantity),
+      costBasisPrice: String(p.costBasisPrice),
+      startDate: p.startDate,
+    });
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user || !editing) return;
+    setEditSubmitting(true);
+    try {
+      await updateEarnPosition(user.uid, editing.id, {
+        apy: parseFloat(editForm.apy) || 0,
+        quantity: parseFloat(editForm.quantity) || 0,
+        costBasisPrice: parseFloat(editForm.costBasisPrice) || 0,
+        startDate: editForm.startDate,
+      });
+      setEditing(null);
+    } finally {
+      setEditSubmitting(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -191,6 +228,20 @@ export default function EarnPage() {
                   </div>
                 </div>
                 <button
+                  onClick={() => {
+                    if (g.positionIds.length === 1) {
+                      const p = positions.find((x) => x.id === g.positionIds[0]);
+                      if (p) openEdit(p);
+                    } else {
+                      setExpandedSymbol((prev) => (prev === g.symbol ? null : g.symbol));
+                    }
+                  }}
+                  className="flex-none ml-1"
+                  style={{ color: "var(--muted)" }}
+                >
+                  <Icon name="edit" style={{ fontSize: 18 }} />
+                </button>
+                <button
                   onClick={() => handleDeleteGroup(g.positionIds)}
                   className="flex-none ml-1"
                   style={{ color: "var(--muted)" }}
@@ -198,6 +249,34 @@ export default function EarnPage() {
                   <Icon name="close" style={{ fontSize: 18 }} />
                 </button>
               </div>
+
+              {expandedSymbol === g.symbol && g.positionIds.length > 1 && (
+                <div
+                  className="flex flex-col gap-2 mt-3 pt-3"
+                  style={{ borderTop: "var(--card-border)" }}
+                >
+                  {positions
+                    .filter((p) => p.symbol === g.symbol)
+                    .map((p) => (
+                      <div key={p.id} className="flex items-center justify-between gap-2 text-[12px]">
+                        <div className="min-w-0 truncate" style={{ color: "var(--muted)" }}>
+                          {formatCoinQty(p.quantity)} {p.symbol} · {p.apy}% APY · เริ่ม {p.startDate}
+                        </div>
+                        <div className="flex items-center gap-2 flex-none">
+                          <button onClick={() => openEdit(p)} style={{ color: "var(--muted)" }}>
+                            <Icon name="edit" style={{ fontSize: 16 }} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteGroup([p.id])}
+                            style={{ color: "var(--muted)" }}
+                          >
+                            <Icon name="close" style={{ fontSize: 16 }} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
             </Card>
           );
         })}
@@ -252,6 +331,53 @@ export default function EarnPage() {
           </div>
           <SubmitButton disabled={submitting}>
             {submitting ? "กำลังบันทึก..." : "เพิ่มสินทรัพย์ใน Earn"}
+          </SubmitButton>
+        </form>
+      </Modal>
+
+      <Modal open={!!editing} onClose={() => setEditing(null)} title={`แก้ไข ${editing?.symbol ?? ""}`}>
+        <form onSubmit={handleEditSubmit} className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <FormInput
+              label="APY (%)"
+              type="number"
+              step="any"
+              required
+              value={editForm.apy}
+              onChange={(e) => setEditForm({ ...editForm, apy: e.target.value })}
+            />
+            <FormInput
+              label={`จำนวนเหรียญตั้งต้น${editing ? ` (${editing.symbol})` : ""}`}
+              type="number"
+              step="any"
+              required
+              value={editForm.quantity}
+              onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormInput
+              label="ราคาต้นทุน (บาท/เหรียญ)"
+              type="number"
+              step="any"
+              required
+              value={editForm.costBasisPrice}
+              onChange={(e) => setEditForm({ ...editForm, costBasisPrice: e.target.value })}
+            />
+            <FormInput
+              label="วันที่เริ่ม"
+              type="date"
+              required
+              value={editForm.startDate}
+              onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+            />
+          </div>
+          <div className="text-[11px]" style={{ color: "var(--muted)" }}>
+            จำนวนเหรียญตั้งต้นคือยอดฝากตอนเริ่ม ไม่ใช่ยอดที่ทบต้นแล้วในปัจจุบัน ระบบจะคำนวณดอกเบี้ยทบต้นใหม่
+            ตามค่าที่แก้ไข
+          </div>
+          <SubmitButton disabled={editSubmitting}>
+            {editSubmitting ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
           </SubmitButton>
         </form>
       </Modal>
