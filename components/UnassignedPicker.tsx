@@ -1,8 +1,9 @@
 "use client";
 
 import { AssetIcon } from "@/components/AssetIcon";
-import { ASSET_CLASS_LABEL } from "@/lib/types";
+import { assetClassLabel } from "@/lib/types";
 import type { Holding } from "@/lib/types";
+import { useLanguage } from "@/lib/i18n";
 
 // Lets the user pick from holdings that exist but aren't in any portfolio
 // right now (removed from one, not yet placed in another), instead of
@@ -15,12 +16,13 @@ export function UnassignedPicker({
   holdings: Holding[];
   onPick: (h: Holding) => void;
 }) {
+  const { t, language } = useLanguage();
   if (holdings.length === 0) return null;
 
   return (
     <div>
       <div className="text-xs font-semibold mb-1.5" style={{ color: "var(--muted)" }}>
-        เลือกจากสินทรัพย์ที่ถอดออกจากพอร์ตอื่นแล้ว
+        {t("picker.chooseFromRemoved")}
       </div>
       <div className="flex flex-col gap-1.5">
         {holdings.map((h) => (
@@ -40,14 +42,14 @@ export function UnassignedPicker({
             <div className="flex-1 min-w-0">
               <div className="text-xs font-bold truncate">{h.symbol}</div>
               <div className="text-[10px] truncate" style={{ color: "var(--muted)" }}>
-                {ASSET_CLASS_LABEL[h.assetClass]}
+                {assetClassLabel(h.assetClass, language)}
               </div>
             </div>
           </button>
         ))}
       </div>
       <div className="text-[11px] mt-2" style={{ color: "var(--muted)" }}>
-        หรือพิมพ์ Ticker ใหม่ด้านล่างสำหรับสินทรัพย์ที่ยังไม่เคยเพิ่ม
+        {t("picker.orTypeNewTicker")}
       </div>
     </div>
   );

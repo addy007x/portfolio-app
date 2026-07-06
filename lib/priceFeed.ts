@@ -6,6 +6,15 @@ export const CURRENCY_LABEL: Record<string, string> = {
   USD: "ดอลลาร์สหรัฐ (USD)",
 };
 
+const CURRENCY_LABEL_EN: Record<string, string> = {
+  THB: "Thai Baht (THB)",
+  USD: "US Dollar (USD)",
+};
+
+export function currencyLabel(code: string, language: "th" | "en"): string {
+  return language === "en" ? (CURRENCY_LABEL_EN[code] ?? code) : (CURRENCY_LABEL[code] ?? code);
+}
+
 export const CURRENCY_CODES = Object.keys(CURRENCY_LABEL);
 
 const RECOGNIZED_FX_CODES = new Set(CURRENCY_CODES.filter((c) => c !== "THB"));

@@ -13,6 +13,18 @@ export const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
   cash: "เงินสด",
 };
 
+const ASSET_CLASS_LABEL_EN: Record<AssetClass, string> = {
+  th_stock: "Thai stocks",
+  foreign_stock: "Foreign stocks",
+  etf: "ETF",
+  crypto: "Crypto",
+  cash: "Cash",
+};
+
+export function assetClassLabel(assetClass: AssetClass, language: "th" | "en"): string {
+  return language === "en" ? ASSET_CLASS_LABEL_EN[assetClass] : ASSET_CLASS_LABEL[assetClass];
+}
+
 export const ASSET_CLASS_COLOR: Record<AssetClass, string> = {
   th_stock: "var(--pal-th)",
   foreign_stock: "var(--pal-us)",
@@ -46,6 +58,17 @@ export interface Holding {
 }
 
 export type TransactionType = "buy" | "sell" | "transfer" | "dividend";
+
+const TRANSACTION_TYPE_LABEL: Record<TransactionType, Record<"th" | "en", string>> = {
+  buy: { th: "ซื้อ", en: "Buy" },
+  sell: { th: "ขาย", en: "Sell" },
+  transfer: { th: "โอนเงิน", en: "Transfer" },
+  dividend: { th: "รับปันผล", en: "Dividend" },
+};
+
+export function transactionTypeLabel(type: TransactionType, language: "th" | "en"): string {
+  return TRANSACTION_TYPE_LABEL[type][language];
+}
 
 export interface Transaction {
   id: string;

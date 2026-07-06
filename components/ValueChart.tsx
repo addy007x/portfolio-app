@@ -3,11 +3,12 @@
 import { useRef, useState } from "react";
 import type { ValueSnapshot } from "@/lib/types";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n";
 
 export function ValueChart({
   points,
   formatMoney,
-  emptyMessage = "กราฟจะเริ่มแสดงหลังเปิดแอปทิ้งไว้ครบ 2 วันขึ้นไป (บันทึกมูลค่าพอร์ตวันละครั้ง)",
+  emptyMessage,
 }: {
   points: ValueSnapshot[];
   formatMoney: (value: number) => string;
@@ -15,6 +16,7 @@ export function ValueChart({
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
+  const { t, language } = useLanguage();
 
   if (points.length < 2) {
     return (
@@ -22,7 +24,7 @@ export function ValueChart({
         className="flex items-center justify-center text-xs text-center px-4"
         style={{ height: 120, color: "var(--muted)" }}
       >
-        {emptyMessage}
+        {emptyMessage ?? t("chart.needsMoreDays")}
       </div>
     );
   }
@@ -165,7 +167,7 @@ export function ValueChart({
             }}
           >
             <div className="text-[10px]" style={{ color: "var(--muted)" }}>
-              {formatThaiDateTime(active.date)}
+              {formatThaiDateTime(active.date, language)}
             </div>
             <div className="text-xs font-bold" style={{ color: "var(--accent)" }}>
               {formatMoney(active.totalValue)}
@@ -174,8 +176,8 @@ export function ValueChart({
         )}
       </div>
       <div className="flex justify-between text-[10px] mt-1" style={{ color: "var(--muted)" }}>
-        <span>{formatThaiDate(points[0].date)}</span>
-        <span>{formatThaiDate(points[points.length - 1].date)}</span>
+        <span>{formatThaiDate(points[0].date, language)}</span>
+        <span>{formatThaiDate(points[points.length - 1].date, language)}</span>
       </div>
     </div>
   );

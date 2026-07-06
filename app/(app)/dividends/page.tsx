@@ -8,10 +8,12 @@ import { Card, Icon } from "@/components/Card";
 import { Modal, FormInput, SubmitButton } from "@/components/Modal";
 import { formatThaiDate } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
+import { useLanguage } from "@/lib/i18n";
 
 export default function DividendsPage() {
   const { user } = useAuth();
   const { formatMoney } = useCurrencyDisplay();
+  const { t, language } = useLanguage();
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -45,7 +47,20 @@ export default function DividendsPage() {
   }, [dividends]);
 
   const maxMonth = Math.max(1, ...monthly);
-  const monthLabels = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+  const monthKeys = [
+    "dividends.monthJan",
+    "dividends.monthFeb",
+    "dividends.monthMar",
+    "dividends.monthApr",
+    "dividends.monthMay",
+    "dividends.monthJun",
+    "dividends.monthJul",
+    "dividends.monthAug",
+    "dividends.monthSep",
+    "dividends.monthOct",
+    "dividends.monthNov",
+    "dividends.monthDec",
+  ];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,7 +85,7 @@ export default function DividendsPage() {
   return (
     <div style={{ animation: "scin 0.3s ease both" }}>
       <div className="flex justify-between items-start mb-4 mt-1">
-        <div className="text-[26px] font-extrabold tracking-tight">เงินปันผล</div>
+        <div className="text-[26px] font-extrabold tracking-tight">{t("dividends.title")}</div>
         <button
           onClick={() => setOpen(true)}
           className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -83,7 +98,7 @@ export default function DividendsPage() {
       <Card>
         <div className="flex justify-between items-center">
           <div className="text-[13px]" style={{ color: "var(--muted)" }}>
-            รวมปีนี้ (YTD)
+            {t("dividends.ytd")}
           </div>
         </div>
         <div className="text-2xl font-extrabold mt-1" style={{ color: "var(--up)" }}>
@@ -106,7 +121,7 @@ export default function DividendsPage() {
                   }}
                 />
                 <span className="text-[9px]" style={{ color: "var(--muted)" }}>
-                  {monthLabels[i]}
+                  {t(monthKeys[i])}
                 </span>
               </div>
             );
@@ -117,7 +132,7 @@ export default function DividendsPage() {
       <div className="flex flex-col gap-2.5 mt-3">
         {dividends.length === 0 && (
           <div className="text-sm text-center py-8" style={{ color: "var(--muted)" }}>
-            ยังไม่มีประวัติเงินปันผล
+            {t("dividends.emptyHistory")}
           </div>
         )}
         {dividends.map((d) => (
@@ -132,7 +147,7 @@ export default function DividendsPage() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-bold truncate">{d.symbol}</div>
                 <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                  {formatThaiDate(d.paymentDate)}
+                  {formatThaiDate(d.paymentDate, language)}
                 </div>
               </div>
               <div className="text-sm font-bold" style={{ color: "var(--up)" }}>
@@ -150,43 +165,43 @@ export default function DividendsPage() {
         ))}
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="บันทึกเงินปันผล">
+      <Modal open={open} onClose={() => setOpen(false)} title={t("dividends.saveModalTitle")}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <FormInput
-            label="สัญลักษณ์ (Symbol)"
+            label={t("dividends.symbolLabel")}
             required
             value={form.symbol}
             onChange={(e) => setForm({ ...form, symbol: e.target.value })}
           />
           <FormInput
-            label="วันขึ้นเครื่องหมาย (Ex-date)"
+            label={t("dividends.exDateLabel")}
             type="date"
             value={form.exDate}
             onChange={(e) => setForm({ ...form, exDate: e.target.value })}
           />
           <FormInput
-            label="วันจ่ายเงินปันผล"
+            label={t("dividends.paymentDateLabel")}
             type="date"
             required
             value={form.paymentDate}
             onChange={(e) => setForm({ ...form, paymentDate: e.target.value })}
           />
           <FormInput
-            label="เงินปันผล/หน่วย"
+            label={t("dividends.amountPerShareLabel")}
             type="number"
             step="any"
             value={form.amountPerShare}
             onChange={(e) => setForm({ ...form, amountPerShare: e.target.value })}
           />
           <FormInput
-            label="จำนวนเงินรวม (บาท)"
+            label={t("dividends.totalAmountLabel")}
             type="number"
             step="any"
             required
             value={form.totalAmount}
             onChange={(e) => setForm({ ...form, totalAmount: e.target.value })}
           />
-          <SubmitButton>บันทึก</SubmitButton>
+          <SubmitButton>{t("dividends.save")}</SubmitButton>
         </form>
       </Modal>
     </div>

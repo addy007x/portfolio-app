@@ -18,6 +18,7 @@ import {
   updateUserProfile,
 } from "@/lib/firestore";
 import type { Portfolio } from "@/lib/types";
+import { useLanguage } from "@/lib/i18n";
 
 const DEFAULT_PORTFOLIO_NAME = "พอร์ตหลัก";
 
@@ -34,6 +35,7 @@ const PortfolioContext = createContext<PortfolioContextValue | null>(null);
 
 export function PortfolioProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [currentPortfolioId, setCurrentPortfolioIdState] = useState<string | null>(null);
   const [defaultPortfolioId, setDefaultPortfolioId] = useState<string | null>(null);
@@ -105,12 +107,12 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     async (id: string): Promise<{ ok: boolean; reason?: string }> => {
       if (!user) return { ok: false, reason: "not signed in" };
       if (portfolios.length <= 1) {
-        return { ok: false, reason: "ต้องมีอย่างน้อย 1 พอร์ต" };
+        return { ok: false, reason: t("portfolios.needAtLeastOne") };
       }
       await deletePortfolio(user.uid, id);
       return { ok: true };
     },
-    [user, portfolios]
+    [user, portfolios, t]
   );
 
   return (

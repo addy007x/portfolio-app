@@ -18,6 +18,7 @@ import { ValueChart } from "@/components/ValueChart";
 import { Modal, FormInput, SubmitButton } from "@/components/Modal";
 import { formatPct } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
+import { useLanguage } from "@/lib/i18n";
 import { fetchCryptoPricesAndIcons } from "@/lib/priceFeed";
 import { RangeSelector } from "@/components/RangeSelector";
 import { rangeStartDate, type ChartRange } from "@/lib/chartRange";
@@ -29,6 +30,7 @@ function formatCoinQty(qty: number): string {
 export default function EarnPage() {
   const { user } = useAuth();
   const { formatMoney, formatSignedMoney } = useCurrencyDisplay();
+  const { t } = useLanguage();
   const [positions, setPositions] = useState<EarnPosition[]>([]);
   const [iconMap, setIconMap] = useState<Record<string, string>>({});
   const [priceMap, setPriceMap] = useState<Record<string, number>>({});
@@ -132,7 +134,7 @@ export default function EarnPage() {
         if (fetched.icons[symbol]) setIconMap((prev) => ({ ...prev, [symbol]: fetched.icons[symbol] }));
       }
       if (!price) {
-        setFormError(`ไม่พบราคาตลาดของ ${symbol} กรุณาตรวจสอบสัญลักษณ์อีกครั้ง`);
+        setFormError(t("earn.priceNotFound", { symbol }));
         return;
       }
       setPriceMap((prev) => ({ ...prev, [symbol]: price }));
@@ -158,7 +160,7 @@ export default function EarnPage() {
   return (
     <div style={{ animation: "scin 0.3s ease both" }}>
       <div className="flex justify-between items-start mb-4 mt-1">
-        <div className="text-[26px] font-extrabold tracking-tight">Crypto Earn</div>
+        <div className="text-[26px] font-extrabold tracking-tight">{t("earn.title")}</div>
         <button
           onClick={() => setOpen(true)}
           className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -171,7 +173,7 @@ export default function EarnPage() {
       <Card>
         <div className="flex justify-between items-center">
           <div className="text-[13px]" style={{ color: "var(--muted)" }}>
-            มูลค่ารวมใน Earn
+            {t("earn.totalValue")}
           </div>
           <RangeSelector value={range} onChange={setRange} />
         </div>
@@ -184,18 +186,18 @@ export default function EarnPage() {
         <ValueChart
           points={summary.history}
           formatMoney={formatMoney}
-          emptyMessage="เพิ่มรายการใน Earn เพื่อดูกราฟดอกเบี้ยทบต้น"
+          emptyMessage={t("earn.empty")}
         />
       </Card>
 
       <div className="text-sm font-semibold mt-4 mb-2.5" style={{ color: "var(--muted)" }}>
-        รายการ Earn
+        {t("earn.listTitle")}
       </div>
 
       <div className="flex flex-col gap-2.5">
         {positions.length === 0 && (
           <div className="text-sm text-center py-8" style={{ color: "var(--muted)" }}>
-            ยังไม่มีรายการใน Earn กดปุ่ม + เพื่อเพิ่มรายการแรก
+            {t("earn.listEmpty")}
           </div>
         )}
         {groups.map((g) => {
@@ -215,7 +217,8 @@ export default function EarnPage() {
                   </div>
                   <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
                     Flexible {g.apy}% APY
-                    {g.positionIds.length > 1 && ` · รวม ${g.positionIds.length} รายการ`}
+                    {g.positionIds.length > 1 &&
+                      ` · ${t("earn.combined")} ${g.positionIds.length} ${t("earn.entries")}`}
                   </div>
                 </div>
                 <div className="text-right flex-none">
@@ -260,7 +263,7 @@ export default function EarnPage() {
                     .map((p) => (
                       <div key={p.id} className="flex items-center justify-between gap-2 text-[12px]">
                         <div className="min-w-0 truncate" style={{ color: "var(--muted)" }}>
-                          {formatCoinQty(p.quantity)} {p.symbol} · {p.apy}% APY · เริ่ม {p.startDate}
+                          {formatCoinQty(p.quantity)} {p.symbol} · {p.apy}% APY · {t("earn.startedOn")} {p.startDate}
                         </div>
                         <div className="flex items-center gap-2 flex-none">
                           <button onClick={() => openEdit(p)} style={{ color: "var(--muted)" }}>
@@ -282,17 +285,17 @@ export default function EarnPage() {
         })}
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="เพิ่มสินทรัพย์ใน Earn">
+      <Modal open={open} onClose={() => setOpen(false)} title={t("earn.addTitle")}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <FormInput
-            label="สัญลักษณ์ (เช่น USDT, BTC, ETH)"
+            label={t("earn.symbol")}
             required
             value={form.symbol}
             onChange={(e) => setForm({ ...form, symbol: e.target.value })}
           />
           <div className="grid grid-cols-2 gap-3">
             <FormInput
-              label="APY (%)"
+              label={t("earn.apy")}
               type="number"
               step="any"
               required
@@ -300,7 +303,7 @@ export default function EarnPage() {
               onChange={(e) => setForm({ ...form, apy: e.target.value })}
             />
             <FormInput
-              label={`จำนวนเหรียญ${form.symbol ? ` (${form.symbol.toUpperCase()})` : ""}`}
+              label={`${t("earn.quantity")}${form.symbol ? ` (${form.symbol.toUpperCase()})` : ""}`}
               type="number"
               step="any"
               required
@@ -310,7 +313,7 @@ export default function EarnPage() {
             />
           </div>
           <FormInput
-            label="วันที่เริ่ม"
+            label={t("earn.startDate")}
             type="date"
             required
             value={form.startDate}
@@ -325,21 +328,19 @@ export default function EarnPage() {
             </div>
           )}
           <div className="text-[11px]" style={{ color: "var(--muted)" }}>
-            ดอกเบี้ยจ่ายเป็นเหรียญเดียวกันและทบต้นรายวันตาม APY จำนวนเหรียญจะเพิ่มขึ้นเรื่อยๆ
-            ส่วนมูลค่าบาทจะขึ้นกับราคาตลาดปัจจุบันของเหรียญนั้นด้วย (ราคาต้นทุนใช้ราคา ณ ตอนบันทึก
-            ไม่รองรับราคาย้อนหลัง)
+            {t("earn.addHelp")}
           </div>
           <SubmitButton disabled={submitting}>
-            {submitting ? "กำลังบันทึก..." : "เพิ่มสินทรัพย์ใน Earn"}
+            {submitting ? t("common.saving") : t("earn.addSubmit")}
           </SubmitButton>
         </form>
       </Modal>
 
-      <Modal open={!!editing} onClose={() => setEditing(null)} title={`แก้ไข ${editing?.symbol ?? ""}`}>
+      <Modal open={!!editing} onClose={() => setEditing(null)} title={`${t("earn.editTitle")} ${editing?.symbol ?? ""}`}>
         <form onSubmit={handleEditSubmit} className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-3">
             <FormInput
-              label="APY (%)"
+              label={t("earn.apy")}
               type="number"
               step="any"
               required
@@ -347,7 +348,7 @@ export default function EarnPage() {
               onChange={(e) => setEditForm({ ...editForm, apy: e.target.value })}
             />
             <FormInput
-              label={`จำนวนเหรียญตั้งต้น${editing ? ` (${editing.symbol})` : ""}`}
+              label={`${t("earn.startingQuantity")}${editing ? ` (${editing.symbol})` : ""}`}
               type="number"
               step="any"
               required
@@ -357,7 +358,7 @@ export default function EarnPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <FormInput
-              label="ราคาต้นทุน (บาท/เหรียญ)"
+              label={t("earn.costBasisPrice")}
               type="number"
               step="any"
               required
@@ -365,7 +366,7 @@ export default function EarnPage() {
               onChange={(e) => setEditForm({ ...editForm, costBasisPrice: e.target.value })}
             />
             <FormInput
-              label="วันที่เริ่ม"
+              label={t("earn.startDate")}
               type="date"
               required
               value={editForm.startDate}
@@ -373,11 +374,10 @@ export default function EarnPage() {
             />
           </div>
           <div className="text-[11px]" style={{ color: "var(--muted)" }}>
-            จำนวนเหรียญตั้งต้นคือยอดฝากตอนเริ่ม ไม่ใช่ยอดที่ทบต้นแล้วในปัจจุบัน ระบบจะคำนวณดอกเบี้ยทบต้นใหม่
-            ตามค่าที่แก้ไข
+            {t("earn.editHelp")}
           </div>
           <SubmitButton disabled={editSubmitting}>
-            {editSubmitting ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
+            {editSubmitting ? t("common.saving") : t("earn.editSubmit")}
           </SubmitButton>
         </form>
       </Modal>

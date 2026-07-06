@@ -22,7 +22,7 @@ import type {
   EarnPosition,
   AssetClass,
 } from "@/lib/types";
-import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
+import { ASSET_CLASS_COLOR, assetClassLabel } from "@/lib/types";
 
 function userCollection(uid: string, name: string) {
   return collection(db, "users", uid, name);
@@ -511,7 +511,10 @@ export function computeHoldingStats(transactions: Transaction[]): HoldingStats {
   };
 }
 
-export function computeAllocation(holdings: Holding[]): AllocationSlice[] {
+export function computeAllocation(
+  holdings: Holding[],
+  language: "th" | "en" = "th"
+): AllocationSlice[] {
   const byClass = new Map<AssetClass, number>();
   let total = 0;
   for (const h of holdings) {
@@ -522,7 +525,7 @@ export function computeAllocation(holdings: Holding[]): AllocationSlice[] {
   return Array.from(byClass.entries())
     .map(([assetClass, value]) => ({
       assetClass,
-      name: ASSET_CLASS_LABEL[assetClass],
+      name: assetClassLabel(assetClass, language),
       color: ASSET_CLASS_COLOR[assetClass],
       value,
       pct: total > 0 ? (value / total) * 100 : 0,

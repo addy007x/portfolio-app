@@ -1,6 +1,10 @@
+"use client";
+
 import { Icon } from "@/components/Card";
+import { useLanguage } from "@/lib/i18n";
 
 export function ComingSoon({ title, icon }: { title: string; icon: string }) {
+  const { t } = useLanguage();
   return (
     <div style={{ animation: "scin 0.3s ease both" }}>
       <div className="text-[26px] font-extrabold tracking-tight mb-4 mt-1">{title}</div>
@@ -9,7 +13,7 @@ export function ComingSoon({ title, icon }: { title: string; icon: string }) {
         style={{ color: "var(--muted)" }}
       >
         <Icon name={icon} style={{ fontSize: 40 }} />
-        <div className="text-sm">ฟีเจอร์นี้กำลังพัฒนา เร็ว ๆ นี้</div>
+        <div className="text-sm">{t("reports.comingSoonMessage")}</div>
       </div>
     </div>
   );

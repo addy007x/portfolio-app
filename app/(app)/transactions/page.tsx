@@ -18,13 +18,14 @@ import {
   migrateLegacyEarnPosition,
 } from "@/lib/firestore";
 import type { Transaction, TransactionType, Holding, AssetClass, EarnPosition } from "@/lib/types";
-import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
+import { ASSET_CLASS_COLOR, assetClassLabel, transactionTypeLabel } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { AssetIcon } from "@/components/AssetIcon";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatThaiDate } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
-import { CURRENCY_CODES, CURRENCY_LABEL, fetchFxRateToThb, fetchCryptoPricesAndIcons } from "@/lib/priceFeed";
+import { useLanguage } from "@/lib/i18n";
+import { CURRENCY_CODES, currencyLabel, fetchFxRateToThb, fetchCryptoPricesAndIcons } from "@/lib/priceFeed";
 import { usePortfolios } from "@/lib/portfolioContext";
 
 const ASSET_CLASSES: AssetClass[] = [
@@ -35,12 +36,7 @@ const ASSET_CLASSES: AssetClass[] = [
   "cash",
 ];
 
-const TYPE_LABEL: Record<TransactionType, string> = {
-  buy: "ซื้อ",
-  sell: "ขาย",
-  transfer: "โอนเงิน",
-  dividend: "รับปันผล",
-};
+const ALL_TRANSACTION_TYPES: TransactionType[] = ["buy", "sell", "transfer", "dividend"];
 
 const TYPE_ICON: Record<TransactionType, string> = {
   buy: "add_circle",
@@ -65,6 +61,7 @@ const EMPTY_FORM = {
 export default function TransactionsPage() {
   const { user } = useAuth();
   const { formatMoney, formatSignedMoney } = useCurrencyDisplay();
+  const { t: tr, language } = useLanguage();
   const { currentPortfolioId, defaultPortfolioId } = usePortfolios();
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
@@ -235,7 +232,7 @@ export default function TransactionsPage() {
   return (
     <div style={{ animation: "scin 0.3s ease both" }}>
       <div className="flex justify-between items-start mb-4 mt-1">
-        <div className="text-[26px] font-extrabold tracking-tight">Transaction</div>
+        <div className="text-[26px] font-extrabold tracking-tight">{tr("transactions.title")}</div>
         <button
           onClick={openAdd}
           className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -256,7 +253,7 @@ export default function TransactionsPage() {
               color: filter === f ? "#04120c" : "var(--text)",
             }}
           >
-            {f === "all" ? "ทั้งหมด" : f === "earn" ? "Earn" : TYPE_LABEL[f]}
+            {f === "all" ? tr("transactions.all") : f === "earn" ? tr("transactions.earn") : transactionTypeLabel(f, language)}
           </button>
         ))}
       </div>
@@ -265,7 +262,7 @@ export default function TransactionsPage() {
         <div className="flex flex-col gap-2.5">
           {earnPositions.length === 0 && (
             <div className="text-sm text-center py-8" style={{ color: "var(--muted)" }}>
-              ยังไม่มีประวัติ Earn — ไปที่หน้า Earn เพื่อเริ่มเพิ่มรายการ
+              {tr("transactions.emptyEarn")}
             </div>
           )}
           {earnPositions.map((p) => {
@@ -286,9 +283,9 @@ export default function TransactionsPage() {
                     <AssetIcon symbol={p.symbol} assetClass="crypto" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold truncate">เริ่ม Earn {p.symbol}</div>
+                    <div className="text-sm font-bold truncate">{tr("transactions.startedEarn")} {p.symbol}</div>
                     <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                      {formatThaiDate(p.startDate)} · {p.apy}% APY · ฝาก {p.quantity} {p.symbol}
+                      {formatThaiDate(p.startDate, language)} · {p.apy}% APY · {tr("transactions.deposited")} {p.quantity} {p.symbol}
                     </div>
                   </div>
                   <div className="text-right flex-none">
@@ -309,17 +306,17 @@ export default function TransactionsPage() {
                 {expanded && (
                   <div className="mt-3.5 pt-3.5" style={{ borderTop: "var(--card-border)" }}>
                     <div className="text-xs font-bold mb-2" style={{ color: "var(--muted)" }}>
-                      ดอกเบี้ยรายวัน (จ่ายเป็น {p.symbol})
+                      {tr("transactions.dailyInterestTitle", { symbol: p.symbol })}
                     </div>
                     {daily.length === 0 && (
                       <div className="text-xs text-center py-2" style={{ color: "var(--muted)" }}>
-                        ยังไม่มีวันที่คำนวณดอกเบี้ยได้
+                        {tr("transactions.noInterestDays")}
                       </div>
                     )}
                     <div className="flex flex-col gap-1.5">
                       {daily.map((d) => (
                         <div key={d.date} className="flex justify-between items-baseline text-xs">
-                          <span style={{ color: "var(--muted)" }}>{formatThaiDate(d.date)}</span>
+                          <span style={{ color: "var(--muted)" }}>{formatThaiDate(d.date, language)}</span>
                           <span className="text-right">
                             <span className="font-semibold" style={{ color: "var(--up)" }}>
                               +{d.coinInterest.toLocaleString("en-US", { maximumFractionDigits: 8 })}{" "}
@@ -342,7 +339,7 @@ export default function TransactionsPage() {
       <div className="flex flex-col gap-2.5">
         {filtered.length === 0 && (
           <div className="text-sm text-center py-8" style={{ color: "var(--muted)" }}>
-            ยังไม่มีธุรกรรม กดปุ่ม + เพื่อเพิ่มรายการแรก
+            {tr("transactions.emptyList")}
           </div>
         )}
         {filtered.map((t) => {
@@ -366,10 +363,10 @@ export default function TransactionsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold truncate">
-                    {TYPE_LABEL[t.type]} {t.symbol}
+                    {transactionTypeLabel(t.type, language)} {t.symbol}
                   </div>
                   <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                    {formatThaiDate(t.date)} · {t.quantity} หน่วย @ {formatMoney(t.price)}
+                    {formatThaiDate(t.date, language)} · {t.quantity} {tr("transactions.units")} @ {formatMoney(t.price)}
                   </div>
                 </div>
                 <div className="text-sm font-bold flex-none">{formatMoney(t.totalValue)}</div>
@@ -397,49 +394,49 @@ export default function TransactionsPage() {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title={editingId ? "แก้ไขธุรกรรม" : "เพิ่มธุรกรรม"}
+        title={editingId ? tr("transactions.editTitle") : tr("transactions.addTitle")}
       >
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <FormInput
-            label="วันที่"
+            label={tr("transactions.dateLabel")}
             type="date"
             required
             value={form.date}
             onChange={(e) => setForm({ ...form, date: e.target.value })}
           />
           <FormSelect
-            label="ประเภทธุรกรรม"
+            label={tr("transactions.typeLabel")}
             value={form.type}
             onChange={(e) => setForm({ ...form, type: e.target.value as TransactionType })}
           >
-            {(Object.keys(TYPE_LABEL) as TransactionType[]).map((t) => (
-              <option key={t} value={t}>
-                {TYPE_LABEL[t]}
+            {ALL_TRANSACTION_TYPES.map((tt) => (
+              <option key={tt} value={tt}>
+                {transactionTypeLabel(tt, language)}
               </option>
             ))}
           </FormSelect>
           <FormInput
-            label="สัญลักษณ์ (Symbol)"
+            label={tr("transactions.symbolLabel")}
             required
             value={form.symbol}
             onChange={(e) => setForm({ ...form, symbol: e.target.value })}
           />
           {form.type === "buy" && !holdings.find((h) => h.symbol === form.symbol.toUpperCase()) && (
             <FormSelect
-              label="ประเภทสินทรัพย์ (สำหรับสินทรัพย์ใหม่)"
+              label={tr("transactions.assetClassForNew")}
               value={form.assetClass}
               onChange={(e) => setForm({ ...form, assetClass: e.target.value as AssetClass })}
             >
               {ASSET_CLASSES.map((c) => (
                 <option key={c} value={c}>
-                  {ASSET_CLASS_LABEL[c]}
+                  {assetClassLabel(c, language)}
                 </option>
               ))}
             </FormSelect>
           )}
           <div className="grid grid-cols-2 gap-3">
             <FormInput
-              label="จำนวนหน่วย"
+              label={tr("transactions.quantityLabel")}
               type="number"
               step="any"
               required
@@ -447,19 +444,19 @@ export default function TransactionsPage() {
               onChange={(e) => setForm({ ...form, quantity: e.target.value })}
             />
             <FormSelect
-              label="สกุลเงิน"
+              label={tr("transactions.currencyLabel")}
               value={form.currency}
               onChange={(e) => setForm({ ...form, currency: e.target.value })}
             >
               {CURRENCY_CODES.map((c) => (
                 <option key={c} value={c}>
-                  {CURRENCY_LABEL[c]}
+                  {currencyLabel(c, language)}
                 </option>
               ))}
             </FormSelect>
           </div>
           <FormInput
-            label={`ต้นทุนเฉลี่ย (${form.currency})`}
+            label={tr("transactions.avgCostLabel", { currency: form.currency })}
             type="number"
             step="any"
             required
@@ -467,7 +464,7 @@ export default function TransactionsPage() {
             onChange={(e) => setForm({ ...form, price: e.target.value })}
           />
           <FormInput
-            label="หมายเหตุ (ไม่บังคับ)"
+            label={tr("transactions.notesLabel")}
             value={form.notes}
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
           />
@@ -478,10 +475,10 @@ export default function TransactionsPage() {
               className="rounded-[14px] py-3 font-bold text-center mt-2"
               style={{ background: "var(--surface2)", color: "var(--text)" }}
             >
-              ยกเลิก
+              {tr("common.cancel")}
             </button>
             <SubmitButton disabled={submitting}>
-              {submitting ? "กำลังบันทึก..." : editingId ? "บันทึกการแก้ไข" : "บันทึกธุรกรรม"}
+              {submitting ? tr("common.saving") : editingId ? tr("common.saveChanges") : tr("transactions.saveTransaction")}
             </SubmitButton>
           </div>
         </form>

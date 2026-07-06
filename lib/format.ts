@@ -13,10 +13,11 @@ export function formatPct(value: number, digits = 1): string {
   return `${sign}${value.toFixed(digits)}%`;
 }
 
-export function formatThaiDate(iso: string): string {
+export function formatThaiDate(iso: string, language: "th" | "en" = "th"): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("th-TH-u-ca-gregory", {
+  const locale = language === "en" ? "en-US" : "th-TH-u-ca-gregory";
+  return d.toLocaleDateString(locale, {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -26,12 +27,13 @@ export function formatThaiDate(iso: string): string {
 // Adds a time-of-day when the input has one ("YYYY-MM-DD" is exactly 10
 // chars and has none); used for chart tooltips where sub-day precision
 // matters (e.g. Earn's compounding curve within the same day).
-export function formatThaiDateTime(iso: string): string {
+export function formatThaiDateTime(iso: string, language: "th" | "en" = "th"): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const datePart = formatThaiDate(iso);
+  const datePart = formatThaiDate(iso, language);
   if (iso.length <= 10) return datePart;
-  const timePart = d.toLocaleTimeString("th-TH", {
+  const locale = language === "en" ? "en-US" : "th-TH";
+  const timePart = d.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,

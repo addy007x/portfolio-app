@@ -13,13 +13,14 @@ import {
   UNASSIGNED_PORTFOLIO_ID,
 } from "@/lib/firestore";
 import type { Holding, AssetClass } from "@/lib/types";
-import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
+import { ASSET_CLASS_COLOR, assetClassLabel } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { AssetIcon } from "@/components/AssetIcon";
 import { UnassignedPicker } from "@/components/UnassignedPicker";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatPct } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
+import { useLanguage } from "@/lib/i18n";
 import { usePortfolios } from "@/lib/portfolioContext";
 
 const ASSET_CLASSES: AssetClass[] = [
@@ -33,6 +34,7 @@ const ASSET_CLASSES: AssetClass[] = [
 export default function PortfolioPage() {
   const { user } = useAuth();
   const { formatMoney } = useCurrencyDisplay();
+  const { t, language } = useLanguage();
   const { portfolios, currentPortfolioId, defaultPortfolioId } = usePortfolios();
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [open, setOpen] = useState(false);
@@ -86,8 +88,8 @@ export default function PortfolioPage() {
           defaultPortfolioId
         );
         if (conflictPortfolioId) {
-          const name = portfolios.find((p) => p.id === conflictPortfolioId)?.name ?? "พอร์ตอื่น";
-          setError(`${symbol} อยู่ในพอร์ต "${name}" อยู่แล้ว ต้องลบออกจากพอร์ตนั้นก่อนถึงจะเพิ่มที่นี่ได้`);
+          const name = portfolios.find((p) => p.id === conflictPortfolioId)?.name ?? t("portfolio.anotherPortfolio");
+          setError(t("portfolio.symbolConflict", { symbol, portfolioName: name }));
           return;
         }
         // If this symbol already exists (e.g. it was just removed from
@@ -119,7 +121,7 @@ export default function PortfolioPage() {
   return (
     <div style={{ animation: "scin 0.3s ease both" }}>
       <div className="flex justify-between items-start mb-4 mt-1">
-        <div className="text-[26px] font-extrabold tracking-tight">Portfolio</div>
+        <div className="text-[26px] font-extrabold tracking-tight">{t("portfolio.title")}</div>
         <button
           onClick={openAdd}
           className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -131,7 +133,7 @@ export default function PortfolioPage() {
 
       <Card>
         <div className="text-[13px]" style={{ color: "var(--muted)" }}>
-          มูลค่ารวม
+          {t("portfolio.totalValue")}
         </div>
         <div className="text-2xl font-extrabold mt-1">{formatMoney(summary.totalValue)}</div>
         <div
@@ -145,7 +147,7 @@ export default function PortfolioPage() {
       <div className="flex flex-col gap-2.5 mt-3">
         {holdings.length === 0 && (
           <div className="text-sm text-center py-8" style={{ color: "var(--muted)" }}>
-            ยังไม่มีสินทรัพย์ในพอร์ต กดปุ่ม + เพื่อเพิ่มรายการแรก
+            {t("portfolio.empty")}
           </div>
         )}
         {holdings.map((h) => {
@@ -168,12 +170,12 @@ export default function PortfolioPage() {
                         className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
                         style={{ background: "var(--up)22", color: "var(--up)" }}
                       >
-                        สด
+                        {t("portfolio.live")}
                       </span>
                     )}
                   </div>
                   <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                    {ASSET_CLASS_LABEL[h.assetClass]} · {h.quantity} หน่วย
+                    {assetClassLabel(h.assetClass, language)} · {h.quantity} {t("portfolio.units")}
                   </div>
                 </div>
                 <div className="text-right flex-none">
@@ -208,13 +210,11 @@ export default function PortfolioPage() {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title={editingId ? "แก้ไขสินทรัพย์" : "เพิ่มสินทรัพย์ใหม่"}
+        title={editingId ? t("portfolio.editTitle") : t("portfolio.addNewTitle")}
       >
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div className="text-[11px] -mt-1" style={{ color: "var(--muted)" }}>
-            {editingId
-              ? "แก้ไขประเภทได้ หากตอนแรกเลือกผิด (เช่น หุ้นต่างประเทศถูกเลือกเป็นหุ้นไทย)"
-              : "เพิ่มชื่อสินทรัพย์ก่อน แล้วไปบันทึกจำนวน/ต้นทุนที่หน้า Transaction"}
+            {editingId ? t("portfolio.editHelp") : t("portfolio.addHelp")}
           </div>
 
           {!editingId && (
@@ -228,7 +228,7 @@ export default function PortfolioPage() {
           )}
 
           <FormSelect
-            label="ประเภท"
+            label={t("portfolio.typeLabel")}
             value={form.assetClass}
             onChange={(e) =>
               setForm({ ...form, assetClass: e.target.value as AssetClass })
@@ -236,7 +236,7 @@ export default function PortfolioPage() {
           >
             {ASSET_CLASSES.map((c) => (
               <option key={c} value={c}>
-                {ASSET_CLASS_LABEL[c]}
+                {assetClassLabel(c, language)}
               </option>
             ))}
           </FormSelect>
@@ -252,7 +252,7 @@ export default function PortfolioPage() {
             />
             {!editingId && (
               <div className="text-[11px] mt-1" style={{ color: "var(--muted)" }}>
-                เช่น AAPL, BTC, PTT
+                {t("portfolio.tickerHint")}
               </div>
             )}
           </div>
@@ -273,14 +273,14 @@ export default function PortfolioPage() {
               className="rounded-[14px] py-3 font-bold text-center mt-2"
               style={{ background: "var(--surface2)", color: "var(--text)" }}
             >
-              ยกเลิก
+              {t("common.cancel")}
             </button>
             <SubmitButton disabled={submitting}>
               {submitting
-                ? "กำลังบันทึก..."
+                ? t("common.saving")
                 : editingId
-                  ? "บันทึกการแก้ไข"
-                  : "+ เพิ่มสินทรัพย์"}
+                  ? t("common.saveChanges")
+                  : t("portfolio.addSubmit")}
             </SubmitButton>
           </div>
         </form>

@@ -4,24 +4,26 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "@/components/Card";
+import { useLanguage } from "@/lib/i18n";
 
 const PRIMARY = [
-  { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: "home" },
-  { id: "portfolio", href: "/portfolio", label: "Portfolio", icon: "donut_small" },
-  { id: "transactions", href: "/transactions", label: "Transaction", icon: "receipt_long" },
-  { id: "earn", href: "/earn", label: "Earn", icon: "savings" },
-];
+  { id: "dashboard", href: "/dashboard", labelKey: "nav.dashboard", icon: "home" },
+  { id: "portfolio", href: "/portfolio", labelKey: "nav.portfolio", icon: "donut_small" },
+  { id: "transactions", href: "/transactions", labelKey: "nav.transaction", icon: "receipt_long" },
+  { id: "earn", href: "/earn", labelKey: "nav.earn", icon: "savings" },
+] as const;
 
 const MORE = [
-  { href: "/dividends", label: "เงินปันผล (Dividends)", icon: "paid" },
-  { href: "/portfolios", label: "แยกพอร์ต", icon: "call_split" },
-  { href: "/reports", label: "รายงาน (Reports)", icon: "description" },
-  { href: "/settings", label: "ตั้งค่า (Settings)", icon: "settings" },
-];
+  { href: "/dividends", labelKey: "nav.dividends", icon: "paid" },
+  { href: "/portfolios", labelKey: "nav.portfolios", icon: "call_split" },
+  { href: "/reports", labelKey: "nav.reports", icon: "description" },
+  { href: "/settings", labelKey: "nav.settings", icon: "settings" },
+] as const;
 
 export function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useLanguage();
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
@@ -41,7 +43,7 @@ export function BottomNav() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-[15px] font-bold mb-3">เมนูเพิ่มเติม</div>
+            <div className="text-[15px] font-bold mb-3">{t("nav.moreSheetTitle")}</div>
             <div className="grid grid-cols-3 gap-3">
               {MORE.map((m) => (
                 <button
@@ -58,7 +60,7 @@ export function BottomNav() {
                     style={{ fontSize: 22, color: "var(--accent)" }}
                   />
                   <span className="text-[11px]" style={{ color: "var(--text)" }}>
-                    {m.label}
+                    {t(m.labelKey)}
                   </span>
                 </button>
               ))}
@@ -87,7 +89,7 @@ export function BottomNav() {
               style={{ color: active ? "var(--accent)" : "var(--muted)" }}
             >
               <Icon name={item.icon} style={{ fontSize: 22 }} />
-              <span className="text-[10px] font-medium">{item.label}</span>
+              <span className="text-[10px] font-medium">{t(item.labelKey)}</span>
             </Link>
           );
         })}
@@ -97,7 +99,7 @@ export function BottomNav() {
           style={{ color: moreOpen ? "var(--accent)" : "var(--muted)" }}
         >
           <Icon name="apps" style={{ fontSize: 22 }} />
-          <span className="text-[10px] font-medium">More</span>
+          <span className="text-[10px] font-medium">{t("nav.more")}</span>
         </button>
       </nav>
     </>

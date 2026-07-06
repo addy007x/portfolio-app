@@ -13,12 +13,13 @@ import {
 } from "@/lib/firestore";
 import { usePortfolios } from "@/lib/portfolioContext";
 import type { Holding, AssetClass } from "@/lib/types";
-import { ASSET_CLASS_LABEL } from "@/lib/types";
+import { assetClassLabel } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { AssetIcon } from "@/components/AssetIcon";
 import { UnassignedPicker } from "@/components/UnassignedPicker";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
+import { useLanguage } from "@/lib/i18n";
 
 const ASSET_CLASSES: AssetClass[] = [
   "th_stock",
@@ -31,6 +32,7 @@ const ASSET_CLASSES: AssetClass[] = [
 export default function PortfoliosPage() {
   const { user } = useAuth();
   const { formatMoney } = useCurrencyDisplay();
+  const { t, language } = useLanguage();
   const {
     portfolios,
     currentPortfolioId,
@@ -83,11 +85,11 @@ export default function PortfoliosPage() {
   async function handleDelete(id: string) {
     setError(null);
     if (holdingsFor(id).length > 0) {
-      setError("ลบพอร์ตนี้ไม่ได้ ยังมีสินทรัพย์อยู่ ย้ายหรือลบสินทรัพย์ทั้งหมดก่อน");
+      setError(t("portfolios.deleteHasAssets"));
       return;
     }
     const result = await removePortfolio(id);
-    if (!result.ok) setError(result.reason ?? "ลบไม่สำเร็จ");
+    if (!result.ok) setError(result.reason ?? t("portfolios.deleteFailed"));
   }
 
   function openTarget(portfolioId: string, current?: number) {
@@ -130,8 +132,8 @@ export default function PortfoliosPage() {
         defaultPortfolioId
       );
       if (conflictPortfolioId) {
-        const name = portfolios.find((p) => p.id === conflictPortfolioId)?.name ?? "พอร์ตอื่น";
-        setAddError(`${symbol} อยู่ในพอร์ต "${name}" อยู่แล้ว ต้องลบออกจากพอร์ตนั้นก่อนถึงจะเพิ่มที่นี่ได้`);
+        const name = portfolios.find((p) => p.id === conflictPortfolioId)?.name ?? t("portfolio.anotherPortfolio");
+        setAddError(t("portfolio.symbolConflict", { symbol, portfolioName: name }));
         return;
       }
       // If this symbol already exists (e.g. it was just removed from another
@@ -167,7 +169,7 @@ export default function PortfoliosPage() {
   return (
     <div style={{ animation: "scin 0.3s ease both" }}>
       <div className="flex justify-between items-start mb-4 mt-1">
-        <div className="text-[26px] font-extrabold tracking-tight">แยกพอร์ต</div>
+        <div className="text-[26px] font-extrabold tracking-tight">{t("portfolios.title")}</div>
         <button
           onClick={() => setCreateOpen(true)}
           className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -178,7 +180,7 @@ export default function PortfoliosPage() {
       </div>
 
       <div className="text-[11px] mb-3" style={{ color: "var(--muted)" }}>
-        แตะชื่อพอร์ตเพื่อสลับพอร์ตที่ใช้งานอยู่ · แตะไอคอนลูกศรเพื่อเพิ่ม/ลบสินทรัพย์และตั้งเป้าหมาย
+        {t("portfolios.hint")}
       </div>
 
       {error && (
@@ -222,12 +224,12 @@ export default function PortfoliosPage() {
                           className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
                           style={{ background: "var(--up)22", color: "var(--up)" }}
                         >
-                          กำลังใช้
+                          {t("portfolios.active")}
                         </span>
                       )}
                     </div>
                     <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                      {assets.length} สินทรัพย์ · {formatMoney(value)}
+                      {t("portfolios.assetsCountLabel", { count: assets.length })} · {formatMoney(value)}
                     </div>
                   </div>
                 </button>
@@ -257,7 +259,7 @@ export default function PortfoliosPage() {
               {pct !== null && (
                 <div className="mt-3">
                   <div className="flex justify-between text-[10px] mb-1" style={{ color: "var(--muted)" }}>
-                    <span>เป้าหมาย {formatMoney(p.targetAmount ?? 0)}</span>
+                    <span>{t("portfolios.targetPrefix")} {formatMoney(p.targetAmount ?? 0)}</span>
                     <span style={{ color: "var(--accent)" }}>{pct.toFixed(0)}%</span>
                   </div>
                   <div
@@ -280,7 +282,7 @@ export default function PortfoliosPage() {
                 <div className="mt-3.5 pt-3.5" style={{ borderTop: "var(--card-border)" }}>
                   {assets.length === 0 && (
                     <div className="text-xs text-center py-3" style={{ color: "var(--muted)" }}>
-                      ยังไม่มีสินทรัพย์ในพอร์ตนี้
+                      {t("portfolios.emptyAssets")}
                     </div>
                   )}
                   <div className="flex flex-col gap-2">
@@ -300,7 +302,7 @@ export default function PortfoliosPage() {
                           onClick={() => handleRemoveFromPortfolio(h.id)}
                           className="flex-none"
                           style={{ color: "var(--muted)" }}
-                          title="เอาออกจากพอร์ต"
+                          title={t("portfolios.removeFromPortfolioTitle")}
                         >
                           <Icon name="remove_circle_outline" style={{ fontSize: 16 }} />
                         </button>
@@ -312,7 +314,7 @@ export default function PortfoliosPage() {
                     className="w-full mt-3 rounded-[10px] py-2 text-xs font-bold"
                     style={{ background: "var(--surface2)", color: "var(--accent)" }}
                   >
-                    + เพิ่มสินทรัพย์ในพอร์ตนี้
+                    {t("portfolios.addAssetHere")}
                   </button>
                 </div>
               )}
@@ -321,41 +323,41 @@ export default function PortfoliosPage() {
         })}
       </div>
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="สร้างพอร์ตใหม่">
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("portfolios.createTitle")}>
         <form onSubmit={handleCreate} className="flex flex-col gap-3">
           <FormInput
-            label="ชื่อพอร์ต"
+            label={t("portfolios.namePlaceholder")}
             required
-            placeholder="เช่น พอร์ตเกษียณ"
+            placeholder={t("portfolios.namePlaceholderExample")}
             value={createName}
             onChange={(e) => setCreateName(e.target.value)}
           />
           <SubmitButton disabled={createSubmitting}>
-            {createSubmitting ? "กำลังบันทึก..." : "สร้างพอร์ต"}
+            {createSubmitting ? t("common.saving") : t("portfolios.createSubmit")}
           </SubmitButton>
         </form>
       </Modal>
 
-      <Modal open={targetOpen} onClose={() => setTargetOpen(false)} title="ตั้งเป้าหมายพอร์ต">
+      <Modal open={targetOpen} onClose={() => setTargetOpen(false)} title={t("portfolios.targetModalTitle")}>
         <form onSubmit={handleTargetSubmit} className="flex flex-col gap-3">
           <FormInput
-            label="เป้าหมาย (บาท)"
+            label={t("portfolios.targetAmountLabel")}
             type="number"
             step="any"
-            placeholder="เช่น 1000000"
+            placeholder={language === "en" ? "e.g. 1000000" : "เช่น 1000000"}
             value={targetValue}
             onChange={(e) => setTargetValue(e.target.value)}
           />
           <div className="text-[11px]" style={{ color: "var(--muted)" }}>
-            เว้นว่างหรือใส่ 0 เพื่อไม่แสดงหลอดความคืบหน้า
+            {t("portfolios.targetHelp")}
           </div>
           <SubmitButton disabled={targetSubmitting}>
-            {targetSubmitting ? "กำลังบันทึก..." : "บันทึกเป้าหมาย"}
+            {targetSubmitting ? t("common.saving") : t("portfolios.targetSubmit")}
           </SubmitButton>
         </form>
       </Modal>
 
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="เพิ่มสินทรัพย์ในพอร์ต">
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title={t("portfolios.addAssetModalTitle")}>
         <form onSubmit={handleAddSubmit} className="flex flex-col gap-3">
           <UnassignedPicker
             holdings={unassigned}
@@ -366,13 +368,13 @@ export default function PortfoliosPage() {
           />
 
           <FormSelect
-            label="ประเภท"
+            label={t("portfolio.typeLabel")}
             value={addForm.assetClass}
             onChange={(e) => setAddForm({ ...addForm, assetClass: e.target.value as AssetClass })}
           >
             {ASSET_CLASSES.map((c) => (
               <option key={c} value={c}>
-                {ASSET_CLASS_LABEL[c]}
+                {assetClassLabel(c, language)}
               </option>
             ))}
           </FormSelect>
@@ -392,7 +394,7 @@ export default function PortfoliosPage() {
             </div>
           )}
           <SubmitButton disabled={addSubmitting}>
-            {addSubmitting ? "กำลังบันทึก..." : "+ เพิ่มสินทรัพย์"}
+            {addSubmitting ? t("common.saving") : t("portfolio.addSubmit")}
           </SubmitButton>
         </form>
       </Modal>
