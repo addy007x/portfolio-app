@@ -17,7 +17,7 @@ import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatThaiDate } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 import { useLanguage } from "@/lib/i18n";
-import { fetchDividendHistory, type DividendEvent } from "@/lib/priceFeed";
+import { fetchDividendHistory, fetchFxRateToThb, type DividendEvent } from "@/lib/priceFeed";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -120,19 +120,25 @@ export default function DividendsPage() {
     dividendSyncInProgress.current = true;
     (async () => {
       try {
+        // Yahoo reports foreign-stock dividends in USD per share; the app
+        // stores every amount in THB, so this must be converted before
+        // being saved (this was previously missing, which is why synced
+        // dividends were showing as ฿0 — a few USD cents rounds to nothing).
+        const usdToThb = await fetchFxRateToThb("USD");
         const seen = new Set(allDividendsRef.current.map((d) => `${d.symbol}|${d.exDate}`));
         for (const symbol of symbols) {
           for (const ev of dividendHistory[symbol]) {
             const quantity = quantityHeldAsOf(transactionsRef.current, symbol, ev.exDate);
             if (quantity <= 0) continue; // not held yet as of this ex-date
-            const totalAmount = quantity * ev.amountPerShare;
+            const amountPerShareThb = ev.amountPerShare * usdToThb;
+            const totalAmount = quantity * amountPerShareThb;
             const key = `${symbol}|${ev.exDate}`;
             if (!seen.has(key)) {
               await addDividend(user.uid, {
                 symbol,
                 exDate: ev.exDate,
                 paymentDate: ev.exDate,
-                amountPerShare: ev.amountPerShare,
+                amountPerShare: amountPerShareThb,
                 totalAmount,
                 source: "auto",
               });
@@ -144,10 +150,11 @@ export default function DividendsPage() {
             );
             if (
               existing?.source === "auto" &&
-              (existing.amountPerShare !== ev.amountPerShare || existing.totalAmount !== totalAmount)
+              (Math.abs(existing.amountPerShare - amountPerShareThb) > 0.001 ||
+                Math.abs(existing.totalAmount - totalAmount) > 0.01)
             ) {
               await updateDividend(user.uid, existing.id, {
-                amountPerShare: ev.amountPerShare,
+                amountPerShare: amountPerShareThb,
                 totalAmount,
               });
             }
