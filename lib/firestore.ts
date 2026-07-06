@@ -17,8 +17,7 @@ import type {
   Holding,
   Transaction,
   Dividend,
-  Goal,
-  CashflowEntry,
+  Portfolio,
   ValueSnapshot,
   EarnPosition,
   AssetClass,
@@ -112,47 +111,40 @@ export async function deleteDividend(uid: string, id: string) {
   await deleteDoc(doc(db, "users", uid, "dividends", id));
 }
 
-// ---- Goals ----
-export function watchGoals(uid: string, cb: (items: Goal[]) => void) {
-  return watchCollection<Goal>(uid, "goals", "name", cb);
+// ---- Portfolios (multi-portfolio segregation) ----
+export function watchPortfolios(uid: string, cb: (items: Portfolio[]) => void) {
+  const q = query(userCollection(uid, "portfolios"), orderBy("createdAtMs", "asc"));
+  return onSnapshot(q, (snap) => {
+    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Portfolio));
+  });
 }
 
-export async function addGoal(uid: string, data: Omit<Goal, "id">) {
-  await addDoc(userCollection(uid, "goals"), data);
+export async function addPortfolio(uid: string, name: string): Promise<string> {
+  const ref = await addDoc(userCollection(uid, "portfolios"), {
+    name,
+    createdAtMs: Date.now(),
+  });
+  return ref.id;
 }
 
-export async function updateGoal(
-  uid: string,
-  id: string,
-  data: Partial<Omit<Goal, "id">>
-) {
-  await updateDoc(doc(db, "users", uid, "goals", id), data);
+export async function deletePortfolio(uid: string, id: string) {
+  await deleteDoc(doc(db, "users", uid, "portfolios", id));
 }
 
-export async function deleteGoal(uid: string, id: string) {
-  await deleteDoc(doc(db, "users", uid, "goals", id));
+// A holding/transaction created before multi-portfolio support has no
+// portfolioId at all; treat those as living in the account's original
+// (default) portfolio rather than making them vanish from every view.
+export function belongsToPortfolio(
+  item: { portfolioId?: string },
+  currentPortfolioId: string | null,
+  defaultPortfolioId: string | null
+): boolean {
+  if (!currentPortfolioId) return true;
+  const effectiveId = item.portfolioId ?? defaultPortfolioId;
+  return effectiveId === currentPortfolioId;
 }
 
-// ---- Cashflow ----
-export function watchCashflow(
-  uid: string,
-  cb: (items: CashflowEntry[]) => void
-) {
-  return watchCollection<CashflowEntry>(uid, "cashflowEntries", "month", cb);
-}
-
-export async function addCashflowEntry(
-  uid: string,
-  data: Omit<CashflowEntry, "id">
-) {
-  await addDoc(userCollection(uid, "cashflowEntries"), data);
-}
-
-export async function deleteCashflowEntry(uid: string, id: string) {
-  await deleteDoc(doc(db, "users", uid, "cashflowEntries", id));
-}
-
-// ---- Value history (daily portfolio-value snapshots) ----
+// ---- Value history (daily portfolio-value snapshots, one series per portfolio) ----
 export function watchValueHistory(
   uid: string,
   cb: (items: ValueSnapshot[]) => void
@@ -160,16 +152,17 @@ export function watchValueHistory(
   return watchCollection<ValueSnapshot>(uid, "valueHistory", "date", cb);
 }
 
-// One document per calendar day (doc id = date), overwritten on every poll
-// so repeated opens in the same day don't create duplicate points.
+// One document per portfolio per calendar day (doc id = `${portfolioId}_${date}`),
+// overwritten on every poll so repeated opens the same day don't duplicate.
 export async function recordValueSnapshot(
   uid: string,
+  portfolioId: string,
   date: string,
   totalValue: number
 ) {
   await setDoc(
-    doc(db, "users", uid, "valueHistory", date),
-    { date, totalValue },
+    doc(db, "users", uid, "valueHistory", `${portfolioId}_${date}`),
+    { date, totalValue, portfolioId },
     { merge: true }
   );
 }
@@ -304,6 +297,8 @@ export interface UserProfile {
   currency: string;
   theme: string;
   language: string;
+  currentPortfolioId?: string;
+  defaultPortfolioId?: string;
 }
 
 export async function updateUserProfile(

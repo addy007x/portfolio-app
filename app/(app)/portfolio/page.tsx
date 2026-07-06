@@ -8,6 +8,7 @@ import {
   updateHolding,
   deleteHolding,
   computePortfolioSummary,
+  belongsToPortfolio,
 } from "@/lib/firestore";
 import type { Holding, AssetClass } from "@/lib/types";
 import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
@@ -16,6 +17,7 @@ import { AssetIcon } from "@/components/AssetIcon";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatPct } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
+import { usePortfolios } from "@/lib/portfolioContext";
 
 const ASSET_CLASSES: AssetClass[] = [
   "th_stock",
@@ -28,7 +30,8 @@ const ASSET_CLASSES: AssetClass[] = [
 export default function PortfolioPage() {
   const { user } = useAuth();
   const { formatMoney } = useCurrencyDisplay();
-  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const { currentPortfolioId, defaultPortfolioId } = usePortfolios();
+  const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -39,9 +42,12 @@ export default function PortfolioPage() {
 
   useEffect(() => {
     if (!user) return;
-    return watchHoldings(user.uid, setHoldings);
+    return watchHoldings(user.uid, setAllHoldings);
   }, [user]);
 
+  const holdings = allHoldings.filter((h) =>
+    belongsToPortfolio(h, currentPortfolioId, defaultPortfolioId)
+  );
   const summary = computePortfolioSummary(holdings);
 
   function openAdd() {
@@ -72,6 +78,7 @@ export default function PortfolioPage() {
           quantity: 0,
           avgCost: 0,
           currentPrice: 0,
+          ...(currentPortfolioId ? { portfolioId: currentPortfolioId } : {}),
         });
       }
       setForm({ symbol: "", assetClass: "th_stock" });

@@ -11,6 +11,7 @@ import {
   addHolding,
   updateHolding,
   computeHoldingStats,
+  belongsToPortfolio,
 } from "@/lib/firestore";
 import type { Transaction, TransactionType, Holding, AssetClass } from "@/lib/types";
 import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
@@ -20,6 +21,7 @@ import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatThaiDate } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 import { CURRENCY_CODES, CURRENCY_LABEL, fetchFxRateToThb } from "@/lib/priceFeed";
+import { usePortfolios } from "@/lib/portfolioContext";
 
 const ASSET_CLASSES: AssetClass[] = [
   "th_stock",
@@ -59,8 +61,9 @@ const EMPTY_FORM = {
 export default function TransactionsPage() {
   const { user } = useAuth();
   const { formatMoney } = useCurrencyDisplay();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const { currentPortfolioId, defaultPortfolioId } = usePortfolios();
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
+  const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [filter, setFilter] = useState<"all" | TransactionType>("all");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -70,13 +73,20 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     if (!user) return;
-    const unsub1 = watchTransactions(user.uid, setTransactions);
-    const unsub2 = watchHoldings(user.uid, setHoldings);
+    const unsub1 = watchTransactions(user.uid, setAllTransactions);
+    const unsub2 = watchHoldings(user.uid, setAllHoldings);
     return () => {
       unsub1();
       unsub2();
     };
   }, [user]);
+
+  const transactions = allTransactions.filter((t) =>
+    belongsToPortfolio(t, currentPortfolioId, defaultPortfolioId)
+  );
+  const holdings = allHoldings.filter((h) =>
+    belongsToPortfolio(h, currentPortfolioId, defaultPortfolioId)
+  );
 
   const filtered = useMemo(
     () => (filter === "all" ? transactions : transactions.filter((t) => t.type === filter)),
@@ -133,6 +143,7 @@ export default function TransactionsPage() {
         quantity: stats.quantity,
         avgCost: stats.avgCost,
         currentPrice: fallbackAssetClass === "th_stock" ? stats.lastPrice : stats.avgCost,
+        ...(currentPortfolioId ? { portfolioId: currentPortfolioId } : {}),
       });
     }
   }
@@ -166,8 +177,12 @@ export default function TransactionsPage() {
           t.id === editingId ? { ...t, ...data } : t
         );
       } else {
-        await addTransaction(user.uid, data);
-        nextTransactions = [...transactions, { id: "__pending__", ...data }];
+        const newData = {
+          ...data,
+          ...(currentPortfolioId ? { portfolioId: currentPortfolioId } : {}),
+        };
+        await addTransaction(user.uid, newData);
+        nextTransactions = [...transactions, { id: "__pending__", ...newData }];
       }
 
       await recomputeHolding(user.uid, symbol, form.assetClass, nextTransactions);

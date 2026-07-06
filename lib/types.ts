@@ -39,6 +39,9 @@ export interface Holding {
   currentPrice: number;
   iconUrl?: string;
   livePrice?: boolean;
+  // Absent on holdings created before multi-portfolio support; treated as
+  // belonging to the account's defaultPortfolioId (see lib/portfolioContext).
+  portfolioId?: string;
   updatedAt?: unknown;
 }
 
@@ -54,6 +57,7 @@ export interface Transaction {
   price: number;
   totalValue: number;
   notes?: string;
+  portfolioId?: string;
   createdAt?: unknown;
 }
 
@@ -67,29 +71,19 @@ export interface Dividend {
   totalAmount: number;
 }
 
-export interface Goal {
+export interface Portfolio {
   id: string;
   name: string;
-  targetAmount: number;
-  currentAmount: number;
-  targetDate?: string;
-  icon: string;
-}
-
-export type CashflowType = "income" | "expense";
-
-export interface CashflowEntry {
-  id: string;
-  month: string; // YYYY-MM
-  category: string;
-  type: CashflowType;
-  amount: number;
+  createdAtMs: number;
 }
 
 export interface ValueSnapshot {
-  id: string; // same as date, e.g. "2026-07-05"
-  date: string; // YYYY-MM-DD
+  id: string;
+  date: string; // YYYY-MM-DD, or a full ISO timestamp for math-generated series
   totalValue: number;
+  // Present on Dashboard's stored daily snapshots; absent for Earn's
+  // math-generated series which isn't portfolio-scoped.
+  portfolioId?: string;
 }
 
 export interface EarnPosition {

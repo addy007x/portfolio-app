@@ -7,33 +7,43 @@ import {
   watchValueHistory,
   computePortfolioSummary,
   computeAllocation,
+  belongsToPortfolio,
 } from "@/lib/firestore";
 import type { Holding, ValueSnapshot } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { Donut } from "@/components/Donut";
 import { ValueChart } from "@/components/ValueChart";
 import { RangeSelector } from "@/components/RangeSelector";
+import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
 import { rangeStartDate, type ChartRange } from "@/lib/chartRange";
 import { formatPct, formatThaiDate } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
+import { usePortfolios } from "@/lib/portfolioContext";
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const { formatMoney, formatSignedMoney } = useCurrencyDisplay();
-  const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [history, setHistory] = useState<ValueSnapshot[]>([]);
+  const { currentPortfolioId, defaultPortfolioId } = usePortfolios();
+  const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
+  const [allHistory, setAllHistory] = useState<ValueSnapshot[]>([]);
   const [range, setRange] = useState<ChartRange>("1M");
 
   useEffect(() => {
     if (!user) return;
-    const unsub1 = watchHoldings(user.uid, setHoldings);
-    const unsub2 = watchValueHistory(user.uid, (items) => setHistory([...items].reverse()));
+    const unsub1 = watchHoldings(user.uid, setAllHoldings);
+    const unsub2 = watchValueHistory(user.uid, (items) => setAllHistory([...items].reverse()));
     return () => {
       unsub1();
       unsub2();
     };
   }, [user]);
 
+  const holdings = allHoldings.filter((h) =>
+    belongsToPortfolio(h, currentPortfolioId, defaultPortfolioId)
+  );
+  const history = allHistory.filter((h) =>
+    belongsToPortfolio(h, currentPortfolioId, defaultPortfolioId)
+  );
   const summary = computePortfolioSummary(holdings);
   const allocation = computeAllocation(holdings);
   const cutoff = rangeStartDate(range, new Date());
@@ -51,6 +61,10 @@ export default function DashboardPage() {
           </div>
         </div>
         <Icon name="notifications" style={{ fontSize: 24, color: "var(--muted)" }} />
+      </div>
+
+      <div className="mb-3">
+        <PortfolioSwitcher />
       </div>
 
       <Card>

@@ -13,10 +13,8 @@ const PRIMARY = [
 ];
 
 const MORE = [
-  { href: "/goals", label: "เป้าหมาย (Goals)", icon: "flag" },
   { href: "/dividends", label: "เงินปันผล (Dividends)", icon: "paid" },
-  { href: "/cashflow", label: "กระแสเงินสด (Cashflow)", icon: "account_balance" },
-  { href: "/performance", label: "ผลตอบแทน (Performance)", icon: "trending_up" },
+  { href: "/portfolios", label: "แยกพอร์ต", icon: "call_split" },
   { href: "/rebalance", label: "ปรับสมดุลพอร์ต (Rebalance)", icon: "balance" },
   { href: "/reports", label: "รายงาน (Reports)", icon: "description" },
   { href: "/settings", label: "ตั้งค่า (Settings)", icon: "settings" },
