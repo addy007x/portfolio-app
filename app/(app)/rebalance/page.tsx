@@ -5,14 +5,15 @@ import { useAuth } from "@/lib/auth";
 import { watchHoldings, belongsToPortfolio } from "@/lib/firestore";
 import { usePortfolios } from "@/lib/portfolioContext";
 import type { Holding } from "@/lib/types";
-import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR, ASSET_CLASS_ICON } from "@/lib/types";
+import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
 import {
   REBALANCE_STRATEGIES,
   getStrategyWeights,
   computeCashFlowRebalance,
   type RebalanceStrategyId,
 } from "@/lib/rebalance";
-import { Card, Icon } from "@/components/Card";
+import { Card } from "@/components/Card";
+import { AssetIcon } from "@/components/AssetIcon";
 import { FormInput } from "@/components/Modal";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 
@@ -43,8 +44,8 @@ export default function RebalancePage() {
     <div style={{ animation: "scin 0.3s ease both" }}>
       <div className="text-[26px] font-extrabold tracking-tight mb-1 mt-1">ปรับสมดุลพอร์ต</div>
       <div className="text-[12px] mb-4" style={{ color: "var(--muted)" }}>
-        Cash Flow Rebalancing — ไม่แนะนำให้ขายสินทรัพย์เดิม แต่จะบอกว่าเงินลงทุนใหม่ควรใส่ที่หมวดไหน
-        เพื่อให้พอร์ตค่อยๆ กลับไปสมดุลตามเป้าหมาย
+        Cash Flow Rebalancing — ไม่แนะนำให้ขายสินทรัพย์เดิม แต่จะบอกว่าเงินลงทุนใหม่ควรใส่ที่สินทรัพย์ไหน
+        (เฉพาะสินทรัพย์ที่ถืออยู่จริง) เพื่อให้พอร์ตค่อยๆ กลับไปสมดุลตามเป้าหมาย
       </div>
 
       <div className="flex gap-2 overflow-x-auto mb-3 pb-1">
@@ -106,21 +107,19 @@ export default function RebalancePage() {
             {rows.map((r) => {
               const hasAllocation = r.allocate > 1;
               return (
-                <Card key={r.assetClass} className="!p-3.5">
+                <Card key={r.symbol} className="!p-3.5">
                   <div className="flex items-center gap-3">
                     <div
-                      className="w-9 h-9 rounded-[11px] flex items-center justify-center flex-none"
+                      className="w-9 h-9 rounded-[11px] flex items-center justify-center flex-none overflow-hidden"
                       style={{ background: `${ASSET_CLASS_COLOR[r.assetClass]}22` }}
                     >
-                      <Icon
-                        name={ASSET_CLASS_ICON[r.assetClass]}
-                        style={{ fontSize: 19, color: ASSET_CLASS_COLOR[r.assetClass] }}
-                      />
+                      <AssetIcon symbol={r.symbol} assetClass={r.assetClass} iconUrl={r.iconUrl} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold truncate">{ASSET_CLASS_LABEL[r.assetClass]}</div>
+                      <div className="text-sm font-bold truncate">{r.symbol}</div>
                       <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                        ปัจจุบัน {r.currentPct.toFixed(0)}% · เป้าหมาย {r.targetPct.toFixed(0)}%
+                        {ASSET_CLASS_LABEL[r.assetClass]} · ปัจจุบัน {r.currentPct.toFixed(0)}% · เป้าหมาย{" "}
+                        {r.targetPct.toFixed(0)}%
                       </div>
                     </div>
                     <div className="text-right flex-none">
