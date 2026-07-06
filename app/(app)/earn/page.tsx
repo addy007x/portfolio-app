@@ -8,6 +8,7 @@ import {
   deleteEarnPosition,
   computeEarnSummary,
   groupEarnPositionsBySymbol,
+  migrateLegacyEarnPosition,
 } from "@/lib/firestore";
 import type { EarnPosition } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
@@ -62,6 +63,14 @@ export default function EarnPage() {
       setIconMap((prev) => ({ ...prev, ...icons }));
     });
   }, [symbolsKey]);
+
+  // Self-heals any position saved before the coin-quantity model existed.
+  useEffect(() => {
+    if (!user) return;
+    for (const p of positions) {
+      migrateLegacyEarnPosition(user.uid, p, priceMap);
+    }
+  }, [user, positions, priceMap]);
 
   const summary = computeEarnSummary(positions, priceMap, now, rangeStartDate(range, now));
   const groups = groupEarnPositionsBySymbol(positions, priceMap, now);

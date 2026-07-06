@@ -29,7 +29,11 @@ export function ValueChart({
 
   const w = 320;
   const h = 130;
-  const values = points.map((p) => p.totalValue);
+  // NaN/Infinity can leak in from bad or legacy-schema source data; drop
+  // those points rather than letting them poison min/max (Math.min/max
+  // return NaN if any input is NaN) or crash indexOf lookups below (NaN is
+  // never === itself, so indexOf(NaN) always returns -1).
+  const values = points.map((p) => (Number.isFinite(p.totalValue) ? p.totalValue : 0));
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
@@ -37,14 +41,15 @@ export function ValueChart({
 
   const coords = points.map((p, i) => {
     const x = i * stepX;
-    const y = 10 + (1 - (p.totalValue - min) / range) * 100;
+    const v = Number.isFinite(p.totalValue) ? p.totalValue : 0;
+    const y = 10 + (1 - (v - min) / range) * 100;
     return [x, y];
   });
 
   const line = coords.map(([x, y]) => `${x},${y}`).join(" ");
   const polygon = `4,118 ${line} ${w - 4},130 4,130`;
-  const maxIdx = values.indexOf(max);
-  const minIdx = values.indexOf(min);
+  const maxIdx = Math.max(0, values.indexOf(max));
+  const minIdx = Math.max(0, values.indexOf(min));
 
   function updateActiveFromPointer(e: React.PointerEvent<SVGSVGElement>) {
     const svg = svgRef.current;

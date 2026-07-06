@@ -217,6 +217,38 @@ export async function deleteEarnPosition(uid: string, id: string) {
   await deleteDoc(doc(db, "users", uid, "earnPositions", id));
 }
 
+export async function updateEarnPosition(
+  uid: string,
+  id: string,
+  data: Partial<Omit<EarnPosition, "id">>
+) {
+  await updateDoc(doc(db, "users", uid, "earnPositions", id), data);
+}
+
+// One-time repair for positions created before the coin-quantity model
+// (they only had a THB `principal`, no `quantity`/`costBasisPrice`, which
+// otherwise computes as NaN everywhere and previously crashed the value
+// chart). Converts principal -> quantity using the current market price —
+// the same approximation new deposits use, since historical prices aren't
+// available on the free tier this app runs on. Safe to call repeatedly:
+// once migrated, it's a no-op.
+export async function migrateLegacyEarnPosition(
+  uid: string,
+  position: EarnPosition,
+  priceMap: Record<string, number>
+): Promise<void> {
+  const raw = position as unknown as Record<string, unknown>;
+  if (typeof raw.quantity === "number" && typeof raw.costBasisPrice === "number") return;
+  const legacyPrincipal = typeof raw.principal === "number" ? raw.principal : null;
+  if (legacyPrincipal === null) return; // genuinely malformed, nothing to recover
+  const price = priceMap[position.symbol];
+  if (!price) return; // wait until a live price is available
+  await updateEarnPosition(uid, position.id, {
+    quantity: legacyPrincipal / price,
+    costBasisPrice: price,
+  });
+}
+
 // Exact (fractional) days between two dates, used for continuous
 // real-time compounding — no flooring, so the value ticks up every
 // second rather than jumping once per calendar day.

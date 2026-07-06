@@ -15,6 +15,7 @@ import {
   belongsToPortfolio,
   earnPositionValue,
   computeDailyInterest,
+  migrateLegacyEarnPosition,
 } from "@/lib/firestore";
 import type { Transaction, TransactionType, Holding, AssetClass, EarnPosition } from "@/lib/types";
 import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
@@ -97,6 +98,14 @@ export default function TransactionsPage() {
       setEarnPriceMap((prev) => ({ ...prev, ...prices }));
     });
   }, [earnSymbolsKey]);
+
+  // Self-heals any position saved before the coin-quantity model existed.
+  useEffect(() => {
+    if (!user) return;
+    for (const p of earnPositions) {
+      migrateLegacyEarnPosition(user.uid, p, earnPriceMap);
+    }
+  }, [user, earnPositions, earnPriceMap]);
 
   const transactions = allTransactions.filter((t) =>
     belongsToPortfolio(t, currentPortfolioId, defaultPortfolioId)
