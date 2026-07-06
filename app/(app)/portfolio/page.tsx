@@ -10,11 +10,13 @@ import {
   computePortfolioSummary,
   belongsToPortfolio,
   findSymbolPortfolioConflict,
+  UNASSIGNED_PORTFOLIO_ID,
 } from "@/lib/firestore";
 import type { Holding, AssetClass } from "@/lib/types";
 import { ASSET_CLASS_LABEL, ASSET_CLASS_COLOR } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { AssetIcon } from "@/components/AssetIcon";
+import { UnassignedPicker } from "@/components/UnassignedPicker";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatPct } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
@@ -50,6 +52,7 @@ export default function PortfolioPage() {
   const holdings = allHoldings.filter((h) =>
     belongsToPortfolio(h, currentPortfolioId, defaultPortfolioId)
   );
+  const unassignedHoldings = allHoldings.filter((h) => h.portfolioId === UNASSIGNED_PORTFOLIO_ID);
   const summary = computePortfolioSummary(holdings);
 
   function openAdd() {
@@ -213,6 +216,16 @@ export default function PortfolioPage() {
               ? "แก้ไขประเภทได้ หากตอนแรกเลือกผิด (เช่น หุ้นต่างประเทศถูกเลือกเป็นหุ้นไทย)"
               : "เพิ่มชื่อสินทรัพย์ก่อน แล้วไปบันทึกจำนวน/ต้นทุนที่หน้า Transaction"}
           </div>
+
+          {!editingId && (
+            <UnassignedPicker
+              holdings={unassignedHoldings}
+              onPick={(h) => {
+                setForm({ symbol: h.symbol, assetClass: h.assetClass });
+                setError(null);
+              }}
+            />
+          )}
 
           <FormSelect
             label="ประเภท"

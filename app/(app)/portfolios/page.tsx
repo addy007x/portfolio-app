@@ -16,6 +16,7 @@ import type { Holding, AssetClass } from "@/lib/types";
 import { ASSET_CLASS_LABEL } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { AssetIcon } from "@/components/AssetIcon";
+import { UnassignedPicker } from "@/components/UnassignedPicker";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 
@@ -211,7 +212,7 @@ export default function PortfoliosPage() {
             ))}
           </div>
           <div className="text-[11px] mt-2" style={{ color: "var(--muted)" }}>
-            เปิด &quot;+ เพิ่มสินทรัพย์ในพอร์ตนี้&quot; ที่พอร์ตที่ต้องการ แล้วพิมพ์ชื่อเดิมเพื่อใส่กลับเข้าไป
+            เปิด &quot;+ เพิ่มสินทรัพย์ในพอร์ตนี้&quot; ที่พอร์ตที่ต้องการ แล้วเลือกจากรายการนี้เพื่อใส่กลับเข้าไป
           </div>
         </Card>
       )}
@@ -383,6 +384,14 @@ export default function PortfoliosPage() {
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="เพิ่มสินทรัพย์ในพอร์ต">
         <form onSubmit={handleAddSubmit} className="flex flex-col gap-3">
+          <UnassignedPicker
+            holdings={unassigned}
+            onPick={(h) => {
+              setAddForm({ symbol: h.symbol, assetClass: h.assetClass });
+              setAddError(null);
+            }}
+          />
+
           <FormSelect
             label="ประเภท"
             value={addForm.assetClass}
