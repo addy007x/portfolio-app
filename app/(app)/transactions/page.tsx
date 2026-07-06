@@ -23,7 +23,7 @@ import { AssetIcon } from "@/components/AssetIcon";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatThaiDate } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
-import { CURRENCY_CODES, CURRENCY_LABEL, fetchFxRateToThb } from "@/lib/priceFeed";
+import { CURRENCY_CODES, CURRENCY_LABEL, fetchFxRateToThb, fetchCryptoPricesAndIcons } from "@/lib/priceFeed";
 import { usePortfolios } from "@/lib/portfolioContext";
 
 const ASSET_CLASSES: AssetClass[] = [
@@ -68,6 +68,7 @@ export default function TransactionsPage() {
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [earnPositions, setEarnPositions] = useState<EarnPosition[]>([]);
+  const [earnPriceMap, setEarnPriceMap] = useState<Record<string, number>>({});
   const [filter, setFilter] = useState<"all" | TransactionType | "earn">("all");
   const [expandedEarnId, setExpandedEarnId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -87,6 +88,15 @@ export default function TransactionsPage() {
       unsub3();
     };
   }, [user]);
+
+  const earnSymbolsKey = Array.from(new Set(earnPositions.map((p) => p.symbol))).sort().join(",");
+  useEffect(() => {
+    const symbols = earnSymbolsKey ? earnSymbolsKey.split(",") : [];
+    if (symbols.length === 0) return;
+    fetchCryptoPricesAndIcons(symbols).then(({ prices }) => {
+      setEarnPriceMap((prev) => ({ ...prev, ...prices }));
+    });
+  }, [earnSymbolsKey]);
 
   const transactions = allTransactions.filter((t) =>
     belongsToPortfolio(t, currentPortfolioId, defaultPortfolioId)
@@ -251,9 +261,9 @@ export default function TransactionsPage() {
           )}
           {earnPositions.map((p) => {
             const expanded = expandedEarnId === p.id;
-            const value = earnPositionValue(p);
-            const gain = value - p.principal;
-            const daily = computeDailyInterest(p);
+            const value = earnPositionValue(p, earnPriceMap);
+            const gain = value - p.quantity * p.costBasisPrice;
+            const daily = computeDailyInterest(p, earnPriceMap);
             return (
               <Card key={p.id} className="!p-3.5">
                 <div
@@ -269,12 +279,15 @@ export default function TransactionsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold truncate">เริ่ม Earn {p.symbol}</div>
                     <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                      {formatThaiDate(p.startDate)} · {p.apy}% APY · ต้นทุน {formatMoney(p.principal)}
+                      {formatThaiDate(p.startDate)} · {p.apy}% APY · ฝาก {p.quantity} {p.symbol}
                     </div>
                   </div>
                   <div className="text-right flex-none">
                     <div className="text-sm font-bold">{formatMoney(value)}</div>
-                    <div className="text-[11px] font-semibold" style={{ color: "var(--up)" }}>
+                    <div
+                      className="text-[11px] font-semibold"
+                      style={{ color: gain >= 0 ? "var(--up)" : "var(--down)" }}
+                    >
                       {formatSignedMoney(gain)}
                     </div>
                   </div>
@@ -287,7 +300,7 @@ export default function TransactionsPage() {
                 {expanded && (
                   <div className="mt-3.5 pt-3.5" style={{ borderTop: "var(--card-border)" }}>
                     <div className="text-xs font-bold mb-2" style={{ color: "var(--muted)" }}>
-                      ดอกเบี้ยรายวัน
+                      ดอกเบี้ยรายวัน (จ่ายเป็น {p.symbol})
                     </div>
                     {daily.length === 0 && (
                       <div className="text-xs text-center py-2" style={{ color: "var(--muted)" }}>
@@ -296,10 +309,16 @@ export default function TransactionsPage() {
                     )}
                     <div className="flex flex-col gap-1.5">
                       {daily.map((d) => (
-                        <div key={d.date} className="flex justify-between text-xs">
+                        <div key={d.date} className="flex justify-between items-baseline text-xs">
                           <span style={{ color: "var(--muted)" }}>{formatThaiDate(d.date)}</span>
-                          <span className="font-semibold" style={{ color: "var(--up)" }}>
-                            {formatSignedMoney(d.interest)}
+                          <span className="text-right">
+                            <span className="font-semibold" style={{ color: "var(--up)" }}>
+                              +{d.coinInterest.toLocaleString("en-US", { maximumFractionDigits: 8 })}{" "}
+                              {p.symbol}
+                            </span>
+                            <span className="ml-1" style={{ color: "var(--muted)" }}>
+                              (≈{formatSignedMoney(d.thbInterest)})
+                            </span>
                           </span>
                         </div>
                       ))}

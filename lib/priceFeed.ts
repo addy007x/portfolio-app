@@ -30,6 +30,30 @@ interface PricesResponse {
   fx: Record<string, number | null>;
 }
 
+// Used by Earn (and anywhere else showing raw crypto quotes/logos rather
+// than updating a Holding document).
+export async function fetchCryptoPricesAndIcons(
+  symbols: string[]
+): Promise<{ prices: Record<string, number>; icons: Record<string, string> }> {
+  if (symbols.length === 0) return { prices: {}, icons: {} };
+  try {
+    const res = await fetch(`/api/prices?crypto=${symbols.join(",")}`);
+    if (!res.ok) return { prices: {}, icons: {} };
+    const data: PricesResponse = await res.json();
+    const prices: Record<string, number> = {};
+    const icons: Record<string, string> = {};
+    for (const sym of symbols) {
+      const price = data.crypto[sym];
+      if (typeof price === "number" && Number.isFinite(price)) prices[sym] = price;
+      const icon = data.cryptoIcons[sym];
+      if (icon) icons[sym] = icon;
+    }
+    return { prices, icons };
+  } catch {
+    return { prices: {}, icons: {} };
+  }
+}
+
 // th_stock has no reliable free data source, so it always stays manual.
 export function isLivePriceEligible(h: Holding): boolean {
   if (h.assetClass === "foreign_stock" || h.assetClass === "etf") return true;

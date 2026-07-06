@@ -224,32 +224,61 @@ function daysBetweenExact(a: Date, b: Date): number {
   return (b.getTime() - a.getTime()) / 86_400_000;
 }
 
-// Continuously-compounded value of one position as of a given date (0 before it starts).
-export function earnPositionValue(p: EarnPosition, asOf: Date = new Date()): number {
+// A map of symbol -> current market price (THB per unit), fetched live via
+// /api/prices?crypto=. Passed into every function below instead of each one
+// fetching its own, since price is a render-time input, not something these
+// pure functions should own.
+export type EarnPriceMap = Record<string, number>;
+
+// Coin quantity compounds continuously — this is the actual "interest paid
+// in the same coin" a real staking/savings product credits, independent of
+// that coin's market price.
+export function earnPositionQuantity(p: EarnPosition, asOf: Date = new Date()): number {
   const start = new Date(p.startDate);
   if (asOf < start) return 0;
   const days = daysBetweenExact(start, asOf);
   const dailyRate = p.apy / 100 / 365;
-  return p.principal * Math.pow(1 + dailyRate, days);
+  return p.quantity * Math.pow(1 + dailyRate, days);
+}
+
+function priceFor(p: EarnPosition, priceMap: EarnPriceMap): number {
+  return priceMap[p.symbol] ?? p.costBasisPrice;
+}
+
+// THB value at a given instant: compounded coin quantity times the current
+// market price (falls back to the cost-basis price if a live quote isn't
+// available), so this reflects both the staking yield and the coin's own
+// price movement — same as a real holding's PnL would.
+export function earnPositionValue(
+  p: EarnPosition,
+  priceMap: EarnPriceMap,
+  asOf: Date = new Date()
+): number {
+  return earnPositionQuantity(p, asOf) * priceFor(p, priceMap);
 }
 
 export interface DailyInterest {
   date: string; // YYYY-MM-DD
-  interest: number; // THB credited that calendar day
+  coinInterest: number; // units of the coin itself credited that day
+  thbInterest: number; // that day's coin interest valued at today's price
 }
 
 // Interest earned on each of the last `days` calendar days (fewer if the
 // position started more recently), derived from the same compounding
-// formula rather than a stored ledger — value(day) minus value(day - 1).
-// On the deposit's first day, the baseline is the principal itself (not 0),
-// so that day shows the actual interest accrued rather than the whole
-// deposit misleadingly appearing as "interest".
+// formula rather than a stored ledger — coin quantity on day minus coin
+// quantity the day before. On the deposit's first day, the baseline is the
+// deposited quantity itself (not 0), so that day shows the actual interest
+// accrued rather than the whole deposit misleadingly appearing as "interest".
+// THB value uses today's price throughout since historical prices aren't
+// available on the free tier this app runs on.
 export function computeDailyInterest(
   p: EarnPosition,
+  priceMap: EarnPriceMap,
   days = 14,
   asOf: Date = new Date()
 ): DailyInterest[] {
   const start = new Date(p.startDate);
+  const price = priceFor(p, priceMap);
   const result: DailyInterest[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const dayEnd = new Date(asOf);
@@ -257,9 +286,13 @@ export function computeDailyInterest(
     if (dayEnd < start) continue;
     const dayStart = new Date(dayEnd);
     dayStart.setDate(dayStart.getDate() - 1);
-    const baseline = dayStart < start ? p.principal : earnPositionValue(p, dayStart);
-    const interest = earnPositionValue(p, dayEnd) - baseline;
-    result.push({ date: dayEnd.toISOString().slice(0, 10), interest });
+    const baselineQty = dayStart < start ? p.quantity : earnPositionQuantity(p, dayStart);
+    const coinInterest = earnPositionQuantity(p, dayEnd) - baselineQty;
+    result.push({
+      date: dayEnd.toISOString().slice(0, 10),
+      coinInterest,
+      thbInterest: coinInterest * price,
+    });
   }
   return result;
 }
@@ -281,18 +314,20 @@ const HISTORY_POINTS = 30;
 // calendar day — so a position started earlier today still shows a real
 // (if short) growth curve instead of needing to wait until tomorrow for a
 // second data point. `asOf` also drives the headline totals, so passing a
-// ticking clock keeps the graph in sync with the live numbers.
+// ticking clock keeps the graph in sync with the live numbers. Each sampled
+// point uses today's price throughout (see computeDailyInterest's note).
 //
 // `rangeStart`, if given and later than the earliest position's actual
 // start, zooms the chart into that window (e.g. "last 24H") without
 // touching the headline totals, which always reflect every position.
 export function computeEarnSummary(
   positions: EarnPosition[],
+  priceMap: EarnPriceMap,
   asOf: Date = new Date(),
   rangeStart?: Date
 ): EarnSummary {
-  const totalPrincipal = positions.reduce((s, p) => s + p.principal, 0);
-  const totalValue = positions.reduce((s, p) => s + earnPositionValue(p, asOf), 0);
+  const totalPrincipal = positions.reduce((s, p) => s + p.quantity * p.costBasisPrice, 0);
+  const totalValue = positions.reduce((s, p) => s + earnPositionValue(p, priceMap, asOf), 0);
   const totalGain = totalValue - totalPrincipal;
   const totalGainPct = totalPrincipal > 0 ? (totalGain / totalPrincipal) * 100 : 0;
 
@@ -307,7 +342,7 @@ export function computeEarnSummary(
     const spanMs = Math.max(0, asOf.getTime() - start.getTime());
     for (let i = 0; i <= HISTORY_POINTS; i++) {
       const t = new Date(start.getTime() + (spanMs * i) / HISTORY_POINTS);
-      const value = positions.reduce((s, p) => s + earnPositionValue(p, t), 0);
+      const value = positions.reduce((s, p) => s + earnPositionValue(p, priceMap, t), 0);
       // Full ISO (not just the date) so tooltips can show sub-day precision.
       history.push({ id: `${t.toISOString()}-${i}`, date: t.toISOString(), totalValue: value });
     }
@@ -321,6 +356,7 @@ export interface EarnGroup {
   apy: number; // taken from whichever position in the group is worth the most right now
   totalValue: number; // summed across every position sharing this symbol
   totalPrincipal: number;
+  totalQuantity: number; // summed coin units across every position sharing this symbol
   positionIds: string[];
 }
 
@@ -330,6 +366,7 @@ export interface EarnGroup {
 // individual position is currently worth the most.
 export function groupEarnPositionsBySymbol(
   positions: EarnPosition[],
+  priceMap: EarnPriceMap,
   asOf: Date = new Date()
 ): EarnGroup[] {
   const bySymbol = new Map<string, EarnPosition[]>();
@@ -341,14 +378,15 @@ export function groupEarnPositionsBySymbol(
   return Array.from(bySymbol.entries())
     .map(([symbol, list]) => {
       const withValue = list
-        .map((p) => ({ p, value: earnPositionValue(p, asOf) }))
+        .map((p) => ({ p, value: earnPositionValue(p, priceMap, asOf) }))
         .sort((a, b) => b.value - a.value);
       const dominant = withValue[0].p;
       return {
         symbol,
         apy: dominant.apy,
         totalValue: withValue.reduce((s, x) => s + x.value, 0),
-        totalPrincipal: list.reduce((s, p) => s + p.principal, 0),
+        totalPrincipal: list.reduce((s, p) => s + p.quantity * p.costBasisPrice, 0),
+        totalQuantity: list.reduce((s, p) => s + earnPositionQuantity(p, asOf), 0),
         positionIds: list.map((p) => p.id),
       };
     })

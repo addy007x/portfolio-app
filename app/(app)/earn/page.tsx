@@ -16,23 +16,29 @@ import { ValueChart } from "@/components/ValueChart";
 import { Modal, FormInput, SubmitButton } from "@/components/Modal";
 import { formatPct } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
-import { fetchFxRateToThb } from "@/lib/priceFeed";
+import { fetchCryptoPricesAndIcons } from "@/lib/priceFeed";
 import { RangeSelector } from "@/components/RangeSelector";
 import { rangeStartDate, type ChartRange } from "@/lib/chartRange";
+
+function formatCoinQty(qty: number): string {
+  return qty.toLocaleString("en-US", { maximumFractionDigits: 8 });
+}
 
 export default function EarnPage() {
   const { user } = useAuth();
   const { formatMoney, formatSignedMoney } = useCurrencyDisplay();
   const [positions, setPositions] = useState<EarnPosition[]>([]);
   const [iconMap, setIconMap] = useState<Record<string, string>>({});
+  const [priceMap, setPriceMap] = useState<Record<string, number>>({});
   const [now, setNow] = useState(() => new Date());
   const [range, setRange] = useState<ChartRange>("24H");
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [form, setForm] = useState({
     symbol: "",
     apy: "",
-    principal: "",
+    quantity: "",
     startDate: new Date().toISOString().slice(0, 10),
   });
 
@@ -51,24 +57,14 @@ export default function EarnPage() {
   useEffect(() => {
     const symbols = symbolsKey ? symbolsKey.split(",") : [];
     if (symbols.length === 0) return;
-    fetch(`/api/prices?crypto=${symbols.join(",")}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!data?.cryptoIcons) return;
-        setIconMap((prev) => {
-          const next = { ...prev };
-          for (const sym of symbols) {
-            const url = data.cryptoIcons[sym];
-            if (url) next[sym] = url;
-          }
-          return next;
-        });
-      })
-      .catch(() => {});
+    fetchCryptoPricesAndIcons(symbols).then(({ prices, icons }) => {
+      setPriceMap((prev) => ({ ...prev, ...prices }));
+      setIconMap((prev) => ({ ...prev, ...icons }));
+    });
   }, [symbolsKey]);
 
-  const summary = computeEarnSummary(positions, now, rangeStartDate(range, now));
-  const groups = groupEarnPositionsBySymbol(positions, now);
+  const summary = computeEarnSummary(positions, priceMap, now, rangeStartDate(range, now));
+  const groups = groupEarnPositionsBySymbol(positions, priceMap, now);
 
   async function handleDeleteGroup(positionIds: string[]) {
     if (!user) return;
@@ -78,19 +74,33 @@ export default function EarnPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
+    setFormError(null);
     setSubmitting(true);
     try {
-      const rate = await fetchFxRateToThb("USD");
+      const symbol = form.symbol.toUpperCase();
+      const quantity = parseFloat(form.quantity) || 0;
+      let price = priceMap[symbol];
+      if (!price) {
+        const fetched = await fetchCryptoPricesAndIcons([symbol]);
+        price = fetched.prices[symbol];
+        if (fetched.icons[symbol]) setIconMap((prev) => ({ ...prev, [symbol]: fetched.icons[symbol] }));
+      }
+      if (!price) {
+        setFormError(`ไม่พบราคาตลาดของ ${symbol} กรุณาตรวจสอบสัญลักษณ์อีกครั้ง`);
+        return;
+      }
+      setPriceMap((prev) => ({ ...prev, [symbol]: price }));
       await addEarnPosition(user.uid, {
-        symbol: form.symbol.toUpperCase(),
+        symbol,
         apy: parseFloat(form.apy) || 0,
-        principal: (parseFloat(form.principal) || 0) * rate,
+        quantity,
+        costBasisPrice: price,
         startDate: form.startDate,
       });
       setForm({
         symbol: "",
         apy: "",
-        principal: "",
+        quantity: "",
         startDate: new Date().toISOString().slice(0, 10),
       });
       setOpen(false);
@@ -122,7 +132,7 @@ export default function EarnPage() {
         <div className="text-[31px] font-extrabold tracking-tight mt-1.5">
           {formatMoney(summary.totalValue)}
         </div>
-        <div className="font-bold text-sm mt-0.5" style={{ color: "var(--up)" }}>
+        <div className="font-bold text-sm mt-0.5" style={{ color: summary.totalGain >= 0 ? "var(--up)" : "var(--down)" }}>
           {formatSignedMoney(summary.totalGain)} ({formatPct(summary.totalGainPct)})
         </div>
         <ValueChart
@@ -154,7 +164,9 @@ export default function EarnPage() {
                   <AssetIcon symbol={g.symbol} assetClass="crypto" iconUrl={iconMap[g.symbol]} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold truncate">{g.symbol}</div>
+                  <div className="text-sm font-bold truncate">
+                    {formatCoinQty(g.totalQuantity)} {g.symbol}
+                  </div>
                   <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
                     Flexible {g.apy}% APY
                     {g.positionIds.length > 1 && ` · รวม ${g.positionIds.length} รายการ`}
@@ -162,7 +174,10 @@ export default function EarnPage() {
                 </div>
                 <div className="text-right flex-none">
                   <div className="text-sm font-bold">{formatMoney(g.totalValue)}</div>
-                  <div className="text-[11px] font-semibold" style={{ color: "var(--up)" }}>
+                  <div
+                    className="text-[11px] font-semibold"
+                    style={{ color: gain >= 0 ? "var(--up)" : "var(--down)" }}
+                  >
                     {formatSignedMoney(gain)}
                   </div>
                 </div>
@@ -197,12 +212,13 @@ export default function EarnPage() {
               onChange={(e) => setForm({ ...form, apy: e.target.value })}
             />
             <FormInput
-              label="จำนวนเงิน (USD)"
+              label={`จำนวนเหรียญ${form.symbol ? ` (${form.symbol.toUpperCase()})` : ""}`}
               type="number"
               step="any"
               required
-              value={form.principal}
-              onChange={(e) => setForm({ ...form, principal: e.target.value })}
+              placeholder="0.01"
+              value={form.quantity}
+              onChange={(e) => setForm({ ...form, quantity: e.target.value })}
             />
           </div>
           <FormInput
@@ -212,8 +228,18 @@ export default function EarnPage() {
             value={form.startDate}
             onChange={(e) => setForm({ ...form, startDate: e.target.value })}
           />
+          {formError && (
+            <div
+              className="text-xs rounded-[10px] px-3 py-2"
+              style={{ background: "var(--down)22", color: "var(--down)" }}
+            >
+              {formError}
+            </div>
+          )}
           <div className="text-[11px]" style={{ color: "var(--muted)" }}>
-            ระบบคำนวณดอกเบี้ยทบต้นรายวันจาก APY ที่กรอก (จำลอง ไม่ใช่การฝากจริง)
+            ดอกเบี้ยจ่ายเป็นเหรียญเดียวกันและทบต้นรายวันตาม APY จำนวนเหรียญจะเพิ่มขึ้นเรื่อยๆ
+            ส่วนมูลค่าบาทจะขึ้นกับราคาตลาดปัจจุบันของเหรียญนั้นด้วย (ราคาต้นทุนใช้ราคา ณ ตอนบันทึก
+            ไม่รองรับราคาย้อนหลัง)
           </div>
           <SubmitButton disabled={submitting}>
             {submitting ? "กำลังบันทึก..." : "เพิ่มสินทรัพย์ใน Earn"}

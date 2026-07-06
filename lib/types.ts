@@ -90,7 +90,8 @@ export interface ValueSnapshot {
 export interface EarnPosition {
   id: string;
   symbol: string;
-  principal: number; // THB, amount deposited
+  quantity: number; // coin units deposited; interest compounds in this same coin
+  costBasisPrice: number; // THB per unit at deposit time, for cost/gain display
   apy: number; // percent, e.g. 5.2
   startDate: string; // YYYY-MM-DD
 }
