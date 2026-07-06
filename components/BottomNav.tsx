@@ -15,7 +15,6 @@ const PRIMARY = [
 const MORE = [
   { href: "/dividends", label: "เงินปันผล (Dividends)", icon: "paid" },
   { href: "/portfolios", label: "แยกพอร์ต", icon: "call_split" },
-  { href: "/rebalance", label: "ปรับสมดุลพอร์ต (Rebalance)", icon: "balance" },
   { href: "/reports", label: "รายงาน (Reports)", icon: "description" },
   { href: "/settings", label: "ตั้งค่า (Settings)", icon: "settings" },
 ];
