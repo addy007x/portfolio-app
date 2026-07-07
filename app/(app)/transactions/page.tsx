@@ -14,6 +14,7 @@ import {
   computeHoldingStats,
   belongsToPortfolio,
   earnPositionValue,
+  earnPositionInterestEarned,
   computeDailyInterest,
   migrateLegacyEarnPosition,
 } from "@/lib/firestore";
@@ -268,7 +269,7 @@ export default function TransactionsPage() {
           {earnPositions.map((p) => {
             const expanded = expandedEarnId === p.id;
             const value = earnPositionValue(p, earnPriceMap);
-            const gain = value - p.quantity * p.costBasisPrice;
+            const gain = earnPositionInterestEarned(p, earnPriceMap);
             const daily = computeDailyInterest(p, earnPriceMap);
             return (
               <Card key={p.id} className="!p-3.5">

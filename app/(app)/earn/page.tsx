@@ -192,8 +192,8 @@ export default function EarnPage() {
         <div className="text-[31px] font-extrabold tracking-tight mt-1.5">
           {formatMoney(summary.totalValue)}
         </div>
-        <div className="font-bold text-sm mt-0.5" style={{ color: summary.totalGain >= 0 ? "var(--up)" : "var(--down)" }}>
-          {formatSignedMoney(summary.totalGain)} ({formatPct(summary.totalGainPct)})
+        <div className="font-bold text-sm mt-0.5" style={{ color: summary.totalInterestEarned >= 0 ? "var(--up)" : "var(--down)" }}>
+          {formatSignedMoney(summary.totalInterestEarned)} ({formatPct(summary.totalInterestEarnedPct)})
         </div>
         <ValueChart
           points={summary.history}
@@ -213,7 +213,7 @@ export default function EarnPage() {
           </div>
         )}
         {groups.map((g) => {
-          const gain = g.totalValue - g.totalPrincipal;
+          const gain = g.totalInterestEarned;
           return (
             <Card key={g.symbol} className="!p-3.5">
               <div className="flex items-center gap-3">

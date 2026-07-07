@@ -240,16 +240,28 @@ export async function updateEarnPosition(
 // the same approximation new deposits use, since historical prices aren't
 // available on the free tier this app runs on. Safe to call repeatedly:
 // once migrated, it's a no-op.
+//
+// Also repairs a `costBasisPrice` that got corrupted to 0 (a bug in an
+// earlier version of the edit form let this through) — priceFor() falls
+// back to costBasisPrice whenever a live quote isn't loaded yet, so a
+// zeroed cost basis prices the whole position at ฿0 despite a real coin
+// balance. The original cost basis is unrecoverable once overwritten, so
+// this re-prices at the current live rate as the best available fallback.
 export async function migrateLegacyEarnPosition(
   uid: string,
   position: EarnPosition,
   priceMap: Record<string, number>
 ): Promise<void> {
   const raw = position as unknown as Record<string, unknown>;
-  if (typeof raw.quantity === "number" && typeof raw.costBasisPrice === "number") return;
+  const price = priceMap[position.symbol];
+  if (typeof raw.quantity === "number" && typeof raw.costBasisPrice === "number") {
+    if (!(raw.costBasisPrice > 0) && price) {
+      await updateEarnPosition(uid, position.id, { costBasisPrice: price });
+    }
+    return;
+  }
   const legacyPrincipal = typeof raw.principal === "number" ? raw.principal : null;
   if (legacyPrincipal === null) return; // genuinely malformed, nothing to recover
-  const price = priceMap[position.symbol];
   if (!price) return; // wait until a live price is available
   await updateEarnPosition(uid, position.id, {
     quantity: legacyPrincipal / price,
@@ -297,6 +309,20 @@ export function earnPositionValue(
   return earnPositionQuantity(p, asOf) * priceFor(p, priceMap);
 }
 
+// THB value of just the interest credited so far (compounded quantity minus
+// the original deposit), valued at today's price — deliberately excludes
+// the coin's own price movement, unlike earnPositionValue's total PnL, so
+// this is the number that actually answers "how much interest have I
+// earned from Earn," independent of whether the coin itself went up or down.
+export function earnPositionInterestEarned(
+  p: EarnPosition,
+  priceMap: EarnPriceMap,
+  asOf: Date = new Date()
+): number {
+  const interestQty = earnPositionQuantity(p, asOf) - p.quantity;
+  return interestQty * priceFor(p, priceMap);
+}
+
 export interface DailyInterest {
   date: string; // YYYY-MM-DD
   coinInterest: number; // units of the coin itself credited that day
@@ -340,8 +366,8 @@ export function computeDailyInterest(
 export interface EarnSummary {
   totalValue: number;
   totalPrincipal: number;
-  totalGain: number;
-  totalGainPct: number;
+  totalInterestEarned: number;
+  totalInterestEarnedPct: number;
   history: ValueSnapshot[];
 }
 
@@ -368,8 +394,11 @@ export function computeEarnSummary(
 ): EarnSummary {
   const totalPrincipal = positions.reduce((s, p) => s + p.quantity * p.costBasisPrice, 0);
   const totalValue = positions.reduce((s, p) => s + earnPositionValue(p, priceMap, asOf), 0);
-  const totalGain = totalValue - totalPrincipal;
-  const totalGainPct = totalPrincipal > 0 ? (totalGain / totalPrincipal) * 100 : 0;
+  const totalInterestEarned = positions.reduce(
+    (s, p) => s + earnPositionInterestEarned(p, priceMap, asOf),
+    0
+  );
+  const totalInterestEarnedPct = totalPrincipal > 0 ? (totalInterestEarned / totalPrincipal) * 100 : 0;
 
   const history: ValueSnapshot[] = [];
   if (positions.length > 0) {
@@ -388,14 +417,14 @@ export function computeEarnSummary(
     }
   }
 
-  return { totalValue, totalPrincipal, totalGain, totalGainPct, history };
+  return { totalValue, totalPrincipal, totalInterestEarned, totalInterestEarnedPct, history };
 }
 
 export interface EarnGroup {
   symbol: string;
   apy: number; // taken from whichever position in the group is worth the most right now
   totalValue: number; // summed across every position sharing this symbol
-  totalPrincipal: number;
+  totalInterestEarned: number;
   totalQuantity: number; // summed coin units across every position sharing this symbol
   positionIds: string[];
 }
@@ -425,7 +454,7 @@ export function groupEarnPositionsBySymbol(
         symbol,
         apy: dominant.apy,
         totalValue: withValue.reduce((s, x) => s + x.value, 0),
-        totalPrincipal: list.reduce((s, p) => s + p.quantity * p.costBasisPrice, 0),
+        totalInterestEarned: list.reduce((s, p) => s + earnPositionInterestEarned(p, priceMap, asOf), 0),
         totalQuantity: list.reduce((s, p) => s + earnPositionQuantity(p, asOf), 0),
         positionIds: list.map((p) => p.id),
       };
