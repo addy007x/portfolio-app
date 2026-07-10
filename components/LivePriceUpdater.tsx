@@ -7,7 +7,9 @@ import { refreshLivePrices } from "@/lib/priceFeed";
 import { usePortfolios } from "@/lib/portfolioContext";
 import type { Holding } from "@/lib/types";
 
-const POLL_INTERVAL_MS = 60_000;
+// Server-side TTL caches in /api/prices absorb the poll volume, so this can
+// be tight without hammering the upstream providers.
+const POLL_INTERVAL_MS = 30_000;
 
 export function LivePriceUpdater() {
   const { user } = useAuth();

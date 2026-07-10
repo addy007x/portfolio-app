@@ -61,9 +61,10 @@ function makeTtlCache<T>() {
 }
 
 const TTL = {
-  cryptoPrice: 25_000, // Binance is real-time; keep this just under the 60s client poll
-  stockPrice: 60_000, // Yahoo quotes are 15-min delayed anyway
-  fxRate: 60 * 60_000, // frankfurter updates once per weekday
+  cryptoPrice: 25_000, // Binance is real-time; keep this just under the client poll
+  stockPrice: 30_000,
+  fxRate: 60_000, // Yahoo FX is real-time; refresh with the price polls
+  fxRateFallback: 60 * 60_000, // frankfurter (ECB) only updates once per weekday
   icon: 24 * 60 * 60_000, // logos essentially never change
   cryptoId: 24 * 60 * 60_000,
   dividends: 6 * 60 * 60_000,
@@ -129,6 +130,14 @@ async function getBinanceUsdtPrices(): Promise<Map<string, number>> {
   return bySymbol;
 }
 
+// Yahoo's currency tickers ("THB=X" is USD/THB, "EURTHB=X" etc. for the
+// rest) quote in real time, unlike frankfurter's ECB reference rate which
+// updates once per weekday — a stale ECB rate showed up as a systematic
+// ~0.3% offset on every USD-quoted price. frankfurter stays as fallback.
+function yahooFxSymbol(code: string): string {
+  return code === "USD" ? "THB=X" : `${code}THB=X`;
+}
+
 async function getFxRatesToThb(codes: Set<string>): Promise<Record<string, number>> {
   const rates: Record<string, number> = { THB: 1 };
   const missing: string[] = [];
@@ -138,23 +147,38 @@ async function getFxRatesToThb(codes: Set<string>): Promise<Record<string, numbe
     if (cached !== undefined) rates[code] = cached;
     else missing.push(code);
   }
-  if (missing.length) {
+  if (!missing.length) return rates;
+
+  const fallback: string[] = [];
+  await Promise.all(
+    missing.map(async (code) => {
+      const live = await fetchYahooPrice(yahooFxSymbol(code));
+      if (live !== null && live > 0) {
+        rates[code] = live;
+        fxRateCache.set(code, live, TTL.fxRate);
+      } else {
+        fallback.push(code);
+      }
+    })
+  );
+
+  if (fallback.length) {
     try {
       const data = await fetchJson(
-        `https://api.frankfurter.app/latest?from=THB&to=${missing.join(",")}`
+        `https://api.frankfurter.app/latest?from=THB&to=${fallback.join(",")}`
       );
-      for (const code of missing) {
+      for (const code of fallback) {
         const thbToCode = data.rates?.[code];
         if (thbToCode) {
           const rate = 1 / thbToCode;
           rates[code] = rate;
-          fxRateCache.set(code, rate, TTL.fxRate);
+          fxRateCache.set(code, rate, TTL.fxRateFallback);
         } else {
           rates[code] = NaN;
         }
       }
     } catch {
-      for (const code of missing) rates[code] = NaN;
+      for (const code of fallback) rates[code] = NaN;
     }
   }
   return rates;
