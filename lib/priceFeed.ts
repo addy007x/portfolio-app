@@ -37,6 +37,16 @@ export interface DividendEvent {
   amountPerShare: number;
 }
 
+// [epochMs, price] pairs, oldest first.
+export type PriceSeries = Array<[number, number]>;
+
+export interface PortfolioHistory {
+  fxUsd: PriceSeries;
+  stocks: Record<string, PriceSeries>;
+  thStocks: Record<string, PriceSeries>;
+  crypto: Record<string, PriceSeries>;
+}
+
 interface PricesResponse {
   crypto: Record<string, number | null>;
   cryptoIcons: Record<string, string | null>;
@@ -44,6 +54,32 @@ interface PricesResponse {
   thStocks?: Record<string, number | null>;
   fx: Record<string, number | null>;
   dividends?: Record<string, DividendEvent[]>;
+  history?: PortfolioHistory;
+}
+
+const EMPTY_HISTORY: PortfolioHistory = { fxUsd: [], stocks: {}, thStocks: {}, crypto: {} };
+
+// Historical closes for the value chart. `range` uses the API's Yahoo-style
+// codes (1d, 5d, 1mo, 3mo, 6mo, 1y, 5y).
+export async function fetchPortfolioHistory(args: {
+  stocks: string[];
+  thStocks: string[];
+  crypto: string[];
+  range: string;
+}): Promise<PortfolioHistory> {
+  if (!args.stocks.length && !args.thStocks.length && !args.crypto.length) return EMPTY_HISTORY;
+  const params = new URLSearchParams({ historyRange: args.range });
+  if (args.stocks.length) params.set("historyStocks", args.stocks.join(","));
+  if (args.thStocks.length) params.set("historyThStocks", args.thStocks.join(","));
+  if (args.crypto.length) params.set("historyCrypto", args.crypto.join(","));
+  try {
+    const res = await fetch(`/api/prices?${params.toString()}`);
+    if (!res.ok) return EMPTY_HISTORY;
+    const data: PricesResponse = await res.json();
+    return data.history ?? EMPTY_HISTORY;
+  } catch {
+    return EMPTY_HISTORY;
+  }
 }
 
 // Real historical ex-dividend dates + per-share amounts for foreign

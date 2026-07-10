@@ -55,8 +55,12 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
     en: "No assets yet — go to Portfolio to add one",
   },
   "chart.needsMoreDays": {
-    th: "กราฟจะเริ่มแสดงหลังเปิดแอปทิ้งไว้ครบ 2 วันขึ้นไป (บันทึกมูลค่าพอร์ตวันละครั้ง)",
-    en: "The chart appears once the app has been used for 2+ days (portfolio value is recorded once a day)",
+    th: "ยังไม่มีข้อมูลกราฟ",
+    en: "No chart data yet",
+  },
+  "dashboard.chartEmpty": {
+    th: "เพิ่มสินทรัพย์เพื่อดูกราฟมูลค่าพอร์ตย้อนหลัง",
+    en: "Add assets to see the portfolio value history",
   },
 
   // Portfolio

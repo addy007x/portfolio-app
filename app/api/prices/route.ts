@@ -69,6 +69,7 @@ const TTL = {
   cryptoId: 24 * 60 * 60_000,
   dividends: 6 * 60 * 60_000,
   binanceTickers: 25_000,
+  history: 5 * 60_000,
 };
 
 const cryptoPriceCache = makeTtlCache<number | null>();
@@ -80,6 +81,8 @@ const dividendsCache = makeTtlCache<Array<{ exDate: string; amountPerShare: numb
 // One shared snapshot of every Binance USDT pair (~100KB), instead of
 // per-symbol requests — a single upstream call covers all clients/symbols.
 const binanceTickersCache = makeTtlCache<Map<string, number>>();
+// Historical series, keyed "yahoo:SYM:range" / "binance:SYM:range".
+const historyCache = makeTtlCache<Array<[number, number]>>();
 
 async function fetchJson(url: string, init?: RequestInit) {
   const res = await fetch(url, { ...init, cache: "no-store" });
@@ -208,6 +211,78 @@ async function fetchYahooPrice(yahooSymbol: string): Promise<number | null> {
   }
 }
 
+// ---- Historical series (for the portfolio value chart) ----
+// Each entry maps a UI range to the granularity fetched from each provider.
+const HISTORY_RANGES: Record<
+  string,
+  { yahooRange: string; yahooInterval: string; binanceInterval: string; binanceLimit: number }
+> = {
+  "1d": { yahooRange: "1d", yahooInterval: "5m", binanceInterval: "15m", binanceLimit: 96 },
+  "5d": { yahooRange: "5d", yahooInterval: "30m", binanceInterval: "1h", binanceLimit: 120 },
+  "1mo": { yahooRange: "1mo", yahooInterval: "1d", binanceInterval: "1d", binanceLimit: 30 },
+  "3mo": { yahooRange: "3mo", yahooInterval: "1d", binanceInterval: "1d", binanceLimit: 90 },
+  "6mo": { yahooRange: "6mo", yahooInterval: "1d", binanceInterval: "1d", binanceLimit: 182 },
+  "1y": { yahooRange: "1y", yahooInterval: "1d", binanceInterval: "1d", binanceLimit: 365 },
+  "5y": { yahooRange: "5y", yahooInterval: "1wk", binanceInterval: "1w", binanceLimit: 260 },
+};
+
+// Timestamped closes from Yahoo (works for stocks, .BK listings and
+// currency tickers alike). Returned as [epochMs, close] pairs.
+async function fetchYahooHistory(
+  yahooSymbol: string,
+  range: string,
+  interval: string
+): Promise<Array<[number, number]>> {
+  const key = `yahoo:${yahooSymbol}:${range}:${interval}`;
+  const cached = historyCache.get(key);
+  if (cached) return cached;
+  try {
+    const data = await fetchJson(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${interval}&range=${range}`,
+      { headers: { "User-Agent": "Mozilla/5.0" } }
+    );
+    const result = data?.chart?.result?.[0];
+    const timestamps: number[] = result?.timestamp ?? [];
+    const closes: Array<number | null> = result?.indicators?.quote?.[0]?.close ?? [];
+    const series: Array<[number, number]> = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      const c = closes[i];
+      if (typeof c === "number" && Number.isFinite(c)) series.push([timestamps[i] * 1000, c]);
+    }
+    historyCache.set(key, series, TTL.history);
+    return series;
+  } catch {
+    return [];
+  }
+}
+
+// Timestamped closes from Binance klines (USDT quote). Coins without a
+// USDT pair return empty and the client falls back to a flat line at the
+// current price.
+async function fetchBinanceHistory(
+  symbol: string,
+  interval: string,
+  limit: number
+): Promise<Array<[number, number]>> {
+  const key = `binance:${symbol}:${interval}:${limit}`;
+  const cached = historyCache.get(key);
+  if (cached) return cached;
+  try {
+    const data = (await fetchJson(
+      `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${interval}&limit=${limit}`
+    )) as Array<[number, string, string, string, string, ...unknown[]]>;
+    const series: Array<[number, number]> = [];
+    for (const k of data) {
+      const close = parseFloat(k[4]);
+      if (Number.isFinite(close)) series.push([k[0], close]);
+    }
+    historyCache.set(key, series, TTL.history);
+    return series;
+  } catch {
+    return [];
+  }
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const parse = (name: string) =>
@@ -220,6 +295,11 @@ export async function GET(req: NextRequest) {
   const thStockSymbols = parse("thStocks");
   const fxCodes = parse("fx").filter((c) => FX_CODES.has(c));
   const dividendStockSymbols = parse("dividendStocks");
+  const historyStocks = parse("historyStocks");
+  const historyThStocks = parse("historyThStocks");
+  const historyCrypto = parse("historyCrypto");
+  const historyRangeParam = (searchParams.get("historyRange") ?? "").toLowerCase();
+  const historyRange = HISTORY_RANGES[historyRangeParam] ? historyRangeParam : null;
 
   const crypto: Record<string, number | null> = {};
   const cryptoIcons: Record<string, string | null> = {};
@@ -415,5 +495,52 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  return Response.json({ crypto, cryptoIcons, stocks, thStocks, fx, dividends });
+  // ---- Historical series for the portfolio value chart ----
+  const history: {
+    fxUsd: Array<[number, number]>;
+    stocks: Record<string, Array<[number, number]>>;
+    thStocks: Record<string, Array<[number, number]>>;
+    crypto: Record<string, Array<[number, number]>>;
+  } = { fxUsd: [], stocks: {}, thStocks: {}, crypto: {} };
+
+  if (historyRange && (historyStocks.length || historyThStocks.length || historyCrypto.length)) {
+    const cfg = HISTORY_RANGES[historyRange];
+    const jobs: Promise<void>[] = [];
+
+    // USD->THB series so USD-quoted closes can be converted at each
+    // point in time rather than with today's rate.
+    if (historyStocks.length || historyCrypto.length) {
+      jobs.push(
+        fetchYahooHistory("THB=X", cfg.yahooRange, cfg.yahooInterval).then((s) => {
+          history.fxUsd = s;
+        })
+      );
+    }
+    for (const sym of historyStocks) {
+      jobs.push(
+        fetchYahooHistory(sym, cfg.yahooRange, cfg.yahooInterval).then((s) => {
+          history.stocks[sym] = s;
+        })
+      );
+    }
+    for (const sym of historyThStocks) {
+      const yahooSymbol = sym.endsWith(".BK") ? sym : `${sym}.BK`;
+      jobs.push(
+        fetchYahooHistory(yahooSymbol, cfg.yahooRange, cfg.yahooInterval).then((s) => {
+          history.thStocks[sym] = s;
+        })
+      );
+    }
+    for (const sym of historyCrypto) {
+      if (sym === "USDT") continue; // quote currency itself; client uses the FX series
+      jobs.push(
+        fetchBinanceHistory(sym, cfg.binanceInterval, cfg.binanceLimit).then((s) => {
+          history.crypto[sym] = s;
+        })
+      );
+    }
+    await Promise.all(jobs);
+  }
+
+  return Response.json({ crypto, cryptoIcons, stocks, thStocks, fx, dividends, history });
 }

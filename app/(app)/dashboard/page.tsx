@@ -1,23 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import {
   watchHoldings,
-  watchValueHistory,
+  watchTransactions,
   computePortfolioSummary,
   computeAllocation,
   belongsToPortfolio,
   getUserProfile,
   updateUserProfile,
 } from "@/lib/firestore";
-import type { Holding, ValueSnapshot } from "@/lib/types";
+import { computePortfolioValueHistory } from "@/lib/valueHistory";
+import { fetchPortfolioHistory, type PortfolioHistory } from "@/lib/priceFeed";
+import type { Holding, Transaction } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
 import { Donut } from "@/components/Donut";
 import { ValueChart } from "@/components/ValueChart";
 import { RangeSelector } from "@/components/RangeSelector";
 import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
-import { rangeStartDate, type ChartRange } from "@/lib/chartRange";
+import type { ChartRange } from "@/lib/chartRange";
 import { formatPct, formatThaiDate } from "@/lib/format";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 import { useLanguage } from "@/lib/i18n";
@@ -29,14 +31,15 @@ export default function DashboardPage() {
   const { t, language } = useLanguage();
   const { currentPortfolioId, defaultPortfolioId } = usePortfolios();
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
-  const [allHistory, setAllHistory] = useState<ValueSnapshot[]>([]);
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
+  const [priceHistory, setPriceHistory] = useState<PortfolioHistory | null>(null);
   const [range, setRange] = useState<ChartRange>("1M");
   const [hideAmounts, setHideAmounts] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     const unsub1 = watchHoldings(user.uid, setAllHoldings);
-    const unsub2 = watchValueHistory(user.uid, (items) => setAllHistory([...items].reverse()));
+    const unsub2 = watchTransactions(user.uid, setAllTransactions);
     getUserProfile(user.uid).then((profile) => {
       if (profile?.hideDashboardAmounts) setHideAmounts(true);
     });
@@ -62,15 +65,70 @@ export default function DashboardPage() {
   const holdings = allHoldings.filter((h) =>
     belongsToPortfolio(h, currentPortfolioId, defaultPortfolioId)
   );
-  const history = allHistory.filter((h) =>
-    belongsToPortfolio(h, currentPortfolioId, defaultPortfolioId)
+  const transactions = allTransactions.filter((tx) =>
+    belongsToPortfolio(tx, currentPortfolioId, defaultPortfolioId)
   );
   const summary = computePortfolioSummary(holdings);
   const allocation = computeAllocation(holdings, language);
-  const cutoff = rangeStartDate(range, new Date());
-  const filteredHistory = cutoff
-    ? history.filter((h) => new Date(h.date).getTime() >= cutoff.getTime())
-    : history;
+
+  // The chart is reconstructed from real market history (see
+  // lib/valueHistory.ts) instead of stored daily snapshots, so it renders
+  // immediately — no waiting for the app to be open across several days.
+  const API_RANGE: Record<ChartRange, string> = {
+    "24H": "1d",
+    "1W": "5d",
+    "1M": "1mo",
+    "3M": "3mo",
+    "6M": "6mo",
+    "1Y": "1y",
+    ALL: "5y",
+  };
+  const symbolsByClass = {
+    stocks: Array.from(
+      new Set(
+        holdings
+          .filter((h) => h.assetClass === "foreign_stock" || h.assetClass === "etf")
+          .map((h) => h.symbol.toUpperCase())
+      )
+    ).sort(),
+    thStocks: Array.from(
+      new Set(holdings.filter((h) => h.assetClass === "th_stock").map((h) => h.symbol.toUpperCase()))
+    ).sort(),
+    crypto: Array.from(
+      new Set(holdings.filter((h) => h.assetClass === "crypto").map((h) => h.symbol.toUpperCase()))
+    ).sort(),
+  };
+  const historyKey = `${range}|${symbolsByClass.stocks.join(",")}|${symbolsByClass.thStocks.join(",")}|${symbolsByClass.crypto.join(",")}`;
+
+  useEffect(() => {
+    const [rangeKey, stocksKey, thKey, cryptoKey] = historyKey.split("|");
+    const args = {
+      stocks: stocksKey ? stocksKey.split(",") : [],
+      thStocks: thKey ? thKey.split(",") : [],
+      crypto: cryptoKey ? cryptoKey.split(",") : [],
+      range: API_RANGE[rangeKey as ChartRange],
+    };
+    let cancelled = false;
+    fetchPortfolioHistory(args).then((h) => {
+      if (!cancelled) setPriceHistory(h);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyKey]);
+
+  const chartPoints = useMemo(() => {
+    if (!priceHistory) return [];
+    const points = computePortfolioValueHistory(holdings, transactions, priceHistory);
+    // Tip the curve with the live total so the chart always ends at the
+    // same number shown in the headline above it.
+    if (points.length > 0) {
+      points.push({ id: "now", date: new Date().toISOString(), totalValue: summary.totalValue });
+    }
+    return points;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [priceHistory, allHoldings, allTransactions, currentPortfolioId, summary.totalValue]);
 
   return (
     <div style={{ animation: "scin 0.3s ease both" }}>
@@ -115,7 +173,7 @@ export default function DashboardPage() {
         >
           {signedMoney(summary.pnl)} ({formatPct(summary.pnlPct)})
         </div>
-        <ValueChart points={filteredHistory} formatMoney={money} />
+        <ValueChart points={chartPoints} formatMoney={money} emptyMessage={t("dashboard.chartEmpty")} />
       </Card>
 
       <div className="grid grid-cols-3 gap-2.5 mt-3">
