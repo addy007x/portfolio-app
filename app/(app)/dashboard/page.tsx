@@ -8,6 +8,8 @@ import {
   computePortfolioSummary,
   computeAllocation,
   belongsToPortfolio,
+  getUserProfile,
+  updateUserProfile,
 } from "@/lib/firestore";
 import type { Holding, ValueSnapshot } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
@@ -29,16 +31,33 @@ export default function DashboardPage() {
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [allHistory, setAllHistory] = useState<ValueSnapshot[]>([]);
   const [range, setRange] = useState<ChartRange>("1M");
+  const [hideAmounts, setHideAmounts] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     const unsub1 = watchHoldings(user.uid, setAllHoldings);
     const unsub2 = watchValueHistory(user.uid, (items) => setAllHistory([...items].reverse()));
+    getUserProfile(user.uid).then((profile) => {
+      if (profile?.hideDashboardAmounts) setHideAmounts(true);
+    });
     return () => {
       unsub1();
       unsub2();
     };
   }, [user]);
+
+  function toggleHideAmounts() {
+    setHideAmounts((prev) => {
+      const next = !prev;
+      if (user) updateUserProfile(user.uid, { hideDashboardAmounts: next });
+      return next;
+    });
+  }
+
+  // In privacy mode every money amount renders as dots; percentages stay
+  // visible since they don't reveal the portfolio's size.
+  const money = (v: number) => (hideAmounts ? "฿••••••" : formatMoney(v));
+  const signedMoney = (v: number) => (hideAmounts ? "฿••••••" : formatSignedMoney(v));
 
   const holdings = allHoldings.filter((h) =>
     belongsToPortfolio(h, currentPortfolioId, defaultPortfolioId)
@@ -73,19 +92,30 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-1.5 text-[13px]" style={{ color: "var(--muted)" }}>
             <span>{t("dashboard.totalValue")}</span>
+            <button
+              onClick={toggleHideAmounts}
+              className="flex items-center"
+              style={{ color: "var(--muted)" }}
+              aria-label={hideAmounts ? "show amounts" : "hide amounts"}
+            >
+              <Icon
+                name={hideAmounts ? "visibility_off" : "visibility"}
+                style={{ fontSize: 17 }}
+              />
+            </button>
           </div>
           <RangeSelector value={range} onChange={setRange} />
         </div>
         <div className="text-[33px] font-extrabold tracking-tight mt-2">
-          {formatMoney(summary.totalValue)}
+          {money(summary.totalValue)}
         </div>
         <div
           className="font-bold text-sm mt-0.5"
           style={{ color: summary.pnl >= 0 ? "var(--up)" : "var(--down)" }}
         >
-          {formatSignedMoney(summary.pnl)} ({formatPct(summary.pnlPct)})
+          {signedMoney(summary.pnl)} ({formatPct(summary.pnlPct)})
         </div>
-        <ValueChart points={filteredHistory} formatMoney={formatMoney} />
+        <ValueChart points={filteredHistory} formatMoney={money} />
       </Card>
 
       <div className="grid grid-cols-3 gap-2.5 mt-3">
@@ -103,7 +133,7 @@ export default function DashboardPage() {
             className="text-sm font-extrabold mt-0.5"
             style={{ color: summary.pnl >= 0 ? "var(--up)" : "var(--down)" }}
           >
-            {formatSignedMoney(summary.pnl)}
+            {signedMoney(summary.pnl)}
           </div>
           <div className="text-[10px]" style={{ color: "var(--muted)" }}>
             ({formatPct(summary.pnlPct)})
@@ -136,7 +166,7 @@ export default function DashboardPage() {
           <div className="text-[11px] mt-2" style={{ color: "var(--muted)" }}>
             {t("dashboard.invested")}
           </div>
-          <div className="text-sm font-extrabold mt-0.5">{formatMoney(summary.totalCost)}</div>
+          <div className="text-sm font-extrabold mt-0.5">{money(summary.totalCost)}</div>
           <div className="text-[10px]">&nbsp;</div>
         </Card>
       </div>
@@ -155,7 +185,7 @@ export default function DashboardPage() {
                 <div className="text-[10px]" style={{ color: "var(--muted)" }}>
                   {t("dashboard.total")}
                 </div>
-                <div className="text-sm font-extrabold">{formatMoney(summary.totalValue)}</div>
+                <div className="text-sm font-extrabold">{money(summary.totalValue)}</div>
               </div>
             </div>
             <div className="flex-1 flex flex-col gap-1.5">

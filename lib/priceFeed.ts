@@ -41,13 +41,14 @@ interface PricesResponse {
   crypto: Record<string, number | null>;
   cryptoIcons: Record<string, string | null>;
   stocks: Record<string, number | null>;
+  thStocks?: Record<string, number | null>;
   fx: Record<string, number | null>;
   dividends?: Record<string, DividendEvent[]>;
 }
 
 // Real historical ex-dividend dates + per-share amounts for foreign
-// stocks/ETFs (th_stock has no free data source, same limitation as live
-// prices — see isLivePriceEligible below).
+// stocks/ETFs (th_stock dividend history has no free data source, so those
+// stay manual even though their prices are now live).
 export async function fetchDividendHistory(
   symbols: string[]
 ): Promise<Record<string, DividendEvent[]>> {
@@ -86,10 +87,12 @@ export async function fetchCryptoPricesAndIcons(
   }
 }
 
-// th_stock has no reliable free data source, so it always stays manual.
+// Thai stocks quote via Yahoo Finance's .BK listings (~15-min delayed but
+// live); crypto/foreign stocks/FX all have live sources too, so everything
+// except unrecognized cash currencies gets auto-priced.
 export function isLivePriceEligible(h: Holding): boolean {
   if (h.assetClass === "foreign_stock" || h.assetClass === "etf") return true;
-  if (h.assetClass === "crypto") return true;
+  if (h.assetClass === "crypto" || h.assetClass === "th_stock") return true;
   if (h.assetClass === "cash") return RECOGNIZED_FX_CODES.has(h.symbol.toUpperCase());
   return false;
 }
@@ -108,6 +111,11 @@ export async function refreshLivePrices(uid: string, holdings: Holding[]) {
         .map((h) => h.symbol.toUpperCase())
     )
   );
+  const thStockSymbols = Array.from(
+    new Set(
+      eligible.filter((h) => h.assetClass === "th_stock").map((h) => h.symbol.toUpperCase())
+    )
+  );
   const fxSymbols = Array.from(
     new Set(eligible.filter((h) => h.assetClass === "cash").map((h) => h.symbol.toUpperCase()))
   );
@@ -115,6 +123,7 @@ export async function refreshLivePrices(uid: string, holdings: Holding[]) {
   const params = new URLSearchParams();
   if (cryptoSymbols.length) params.set("crypto", cryptoSymbols.join(","));
   if (stockSymbols.length) params.set("stocks", stockSymbols.join(","));
+  if (thStockSymbols.length) params.set("thStocks", thStockSymbols.join(","));
   if (fxSymbols.length) params.set("fx", fxSymbols.join(","));
 
   let data: PricesResponse;
@@ -137,6 +146,8 @@ export async function refreshLivePrices(uid: string, holdings: Holding[]) {
         iconUrl = data.cryptoIcons[sym] ?? undefined;
       } else if (h.assetClass === "foreign_stock" || h.assetClass === "etf") {
         price = data.stocks[sym];
+      } else if (h.assetClass === "th_stock") {
+        price = data.thStocks?.[sym];
       } else if (h.assetClass === "cash") {
         price = data.fx[sym];
       }

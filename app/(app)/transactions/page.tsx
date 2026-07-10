@@ -29,13 +29,9 @@ import { useLanguage } from "@/lib/i18n";
 import { CURRENCY_CODES, currencyLabel, fetchFxRateToThb, fetchCryptoPricesAndIcons } from "@/lib/priceFeed";
 import { usePortfolios } from "@/lib/portfolioContext";
 
-const ASSET_CLASSES: AssetClass[] = [
-  "th_stock",
-  "foreign_stock",
-  "etf",
-  "crypto",
-  "cash",
-];
+// "cash" is intentionally not offered when creating new holdings (matches
+// the Portfolio add form); existing cash holdings still work.
+const ASSET_CLASSES: AssetClass[] = ["th_stock", "foreign_stock", "etf", "crypto"];
 
 const ALL_TRANSACTION_TYPES: TransactionType[] = ["buy", "sell", "transfer", "dividend"];
 

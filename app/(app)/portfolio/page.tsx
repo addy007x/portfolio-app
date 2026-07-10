@@ -23,13 +23,9 @@ import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 import { useLanguage } from "@/lib/i18n";
 import { usePortfolios } from "@/lib/portfolioContext";
 
-const ASSET_CLASSES: AssetClass[] = [
-  "th_stock",
-  "foreign_stock",
-  "etf",
-  "crypto",
-  "cash",
-];
+// "cash" is intentionally not offered when adding new assets; existing cash
+// holdings still render, and the select re-adds the option while editing one.
+const ASSET_CLASSES: AssetClass[] = ["th_stock", "foreign_stock", "etf", "crypto"];
 
 export default function PortfolioPage() {
   const { user } = useAuth();
@@ -234,11 +230,13 @@ export default function PortfolioPage() {
               setForm({ ...form, assetClass: e.target.value as AssetClass })
             }
           >
-            {ASSET_CLASSES.map((c) => (
-              <option key={c} value={c}>
-                {assetClassLabel(c, language)}
-              </option>
-            ))}
+            {(form.assetClass === "cash" ? [...ASSET_CLASSES, "cash" as const] : ASSET_CLASSES).map(
+              (c) => (
+                <option key={c} value={c}>
+                  {assetClassLabel(c, language)}
+                </option>
+              )
+            )}
           </FormSelect>
 
           <div>

@@ -471,6 +471,8 @@ export interface UserProfile {
   language: string;
   currentPortfolioId?: string;
   defaultPortfolioId?: string;
+  // Privacy toggle: mask money amounts on the Dashboard (eye icon).
+  hideDashboardAmounts?: boolean;
 }
 
 export async function updateUserProfile(

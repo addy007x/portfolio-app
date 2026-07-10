@@ -20,10 +20,21 @@ export function LivePriceUpdater() {
     defaultPortfolioIdRef.current = defaultPortfolioId;
   }, [defaultPortfolioId]);
 
+  // Set when the poll effect below mounts, so the holdings watcher can
+  // trigger an immediate refresh the moment the first snapshot arrives —
+  // otherwise the mount-time tick always races the (async) snapshot, loses,
+  // and prices sit stale for a full poll interval after every app open.
+  const tickRef = useRef<(() => void) | null>(null);
+  const firstSnapshotHandled = useRef(false);
+
   useEffect(() => {
     if (!user) return;
     const unsubscribe = watchHoldings(user.uid, (items) => {
       holdingsRef.current = items;
+      if (!firstSnapshotHandled.current && items.length > 0) {
+        firstSnapshotHandled.current = true;
+        tickRef.current?.();
+      }
     });
     return unsubscribe;
   }, [user]);
@@ -59,9 +70,13 @@ export function LivePriceUpdater() {
       }
     }
 
+    tickRef.current = tick;
     tick();
     const interval = setInterval(tick, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return () => {
+      tickRef.current = null;
+      clearInterval(interval);
+    };
   }, [user]);
 
   return null;
