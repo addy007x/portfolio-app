@@ -64,6 +64,7 @@ export default function TransactionsPage() {
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [earnPositions, setEarnPositions] = useState<EarnPosition[]>([]);
   const [earnPriceMap, setEarnPriceMap] = useState<Record<string, number>>({});
+  const [earnIconMap, setEarnIconMap] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<"all" | TransactionType | "earn">("all");
   const [expandedEarnId, setExpandedEarnId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -88,8 +89,9 @@ export default function TransactionsPage() {
   useEffect(() => {
     const symbols = earnSymbolsKey ? earnSymbolsKey.split(",") : [];
     if (symbols.length === 0) return;
-    fetchCryptoPricesAndIcons(symbols).then(({ prices }) => {
+    fetchCryptoPricesAndIcons(symbols).then(({ prices, icons }) => {
       setEarnPriceMap((prev) => ({ ...prev, ...prices }));
+      setEarnIconMap((prev) => ({ ...prev, ...icons }));
     });
   }, [earnSymbolsKey]);
 
@@ -277,7 +279,7 @@ export default function TransactionsPage() {
                     className="w-9 h-9 rounded-[11px] flex items-center justify-center flex-none overflow-hidden"
                     style={{ background: "var(--pal-crypto)22" }}
                   >
-                    <AssetIcon symbol={p.symbol} assetClass="crypto" />
+                    <AssetIcon symbol={p.symbol} assetClass="crypto" iconUrl={earnIconMap[p.symbol]} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold truncate">{tr("transactions.startedEarn")} {p.symbol}</div>

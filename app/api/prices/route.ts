@@ -160,13 +160,24 @@ async function getFxRatesToThb(codes: Set<string>): Promise<Record<string, numbe
   return rates;
 }
 
+// Latest traded price including pre-market/after-hours: with
+// includePrePost=true the 1-minute series carries extended-hours bars, so
+// the last non-null close is the freshest trade whether the exchange is in
+// its regular session or not. meta.regularMarketPrice (regular session
+// only) is the fallback when the series is empty or entirely null.
 async function fetchYahooPrice(yahooSymbol: string): Promise<number | null> {
   try {
     const data = await fetchJson(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}`,
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1m&range=1d&includePrePost=true`,
       { headers: { "User-Agent": "Mozilla/5.0" } }
     );
-    const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+    const result = data?.chart?.result?.[0];
+    const closes: Array<number | null> = result?.indicators?.quote?.[0]?.close ?? [];
+    for (let i = closes.length - 1; i >= 0; i--) {
+      const c = closes[i];
+      if (typeof c === "number" && Number.isFinite(c)) return c;
+    }
+    const price = result?.meta?.regularMarketPrice;
     return typeof price === "number" && Number.isFinite(price) ? price : null;
   } catch {
     return null;
