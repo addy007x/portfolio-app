@@ -172,13 +172,12 @@ export default function PortfolioPage() {
                   </div>
                   <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
                     {assetClassLabel(h.assetClass, language)} · {h.quantity} {t("portfolio.units")}
-                    {h.avgCost > 0 && (
-                      <>
-                        {" "}
-                        · {t("portfolio.costBasis")} {formatMoney(h.avgCost)}
-                      </>
-                    )}
                   </div>
+                  {h.avgCost > 0 && (
+                    <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
+                      {t("portfolio.costBasis")} {formatMoney(h.avgCost)}
+                    </div>
+                  )}
                 </div>
                 <div className="text-right flex-none">
                   <div className="text-sm font-bold">{formatMoney(value)}</div>
