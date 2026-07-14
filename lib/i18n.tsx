@@ -71,7 +71,7 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
     en: "No assets in this portfolio yet. Tap + to add your first one.",
   },
   "portfolio.units": { th: "หน่วย", en: "units" },
-  "portfolio.costBasis": { th: "ต้นทุน", en: "Cost" },
+  "portfolio.costBasis": { th: "ต้นทุน/หน่วย", en: "Cost/unit" },
   "portfolio.addTitle": { th: "เพิ่มสินทรัพย์", en: "Add asset" },
   "portfolio.editTitle": { th: "แก้ไขสินทรัพย์", en: "Edit asset" },
   "portfolio.symbol": { th: "สัญลักษณ์ (เช่น PTT, AAPL, BTC)", en: "Symbol (e.g. PTT, AAPL, BTC)" },
