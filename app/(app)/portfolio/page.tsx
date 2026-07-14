@@ -182,6 +182,11 @@ export default function PortfolioPage() {
                   >
                     {formatMoney(pnl)}
                   </div>
+                  {h.avgCost > 0 && (
+                    <div className="text-[10px]" style={{ color: "var(--muted)" }}>
+                      {t("portfolio.costBasis")} {formatMoney(h.quantity * h.avgCost)}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => openEdit(h)}
