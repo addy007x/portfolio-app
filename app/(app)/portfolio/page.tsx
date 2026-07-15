@@ -19,7 +19,7 @@ import { AssetIcon } from "@/components/AssetIcon";
 import { UnassignedPicker } from "@/components/UnassignedPicker";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatPct } from "@/lib/format";
-import { useCurrencyDisplay, formatThb } from "@/lib/currencyDisplay";
+import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 import { useLanguage } from "@/lib/i18n";
 import { usePortfolios } from "@/lib/portfolioContext";
 
@@ -175,7 +175,7 @@ export default function PortfolioPage() {
                   </div>
                   {h.avgCost > 0 && (
                     <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                      {t("portfolio.costBasis")} {formatThb(h.avgCost)}
+                      {t("portfolio.costBasis")} {formatMoney(h.avgCost)}
                     </div>
                   )}
                 </div>
