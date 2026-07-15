@@ -19,9 +19,10 @@ import { AssetIcon } from "@/components/AssetIcon";
 import { UnassignedPicker } from "@/components/UnassignedPicker";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatPct } from "@/lib/format";
-import { useCurrencyDisplay } from "@/lib/currencyDisplay";
+import { useCurrencyDisplay, formatUsdAt } from "@/lib/currencyDisplay";
 import { useLanguage } from "@/lib/i18n";
 import { usePortfolios } from "@/lib/portfolioContext";
+import { fetchFxRateToThb } from "@/lib/priceFeed";
 
 // "cash" is intentionally not offered when adding new assets; existing cash
 // holdings still render, and the select re-adds the option while editing one.
@@ -29,8 +30,19 @@ const ASSET_CLASSES: AssetClass[] = ["th_stock", "foreign_stock", "etf", "crypto
 
 export default function PortfolioPage() {
   const { user } = useAuth();
-  const { formatMoney } = useCurrencyDisplay();
+  const { currency, formatMoney } = useCurrencyDisplay();
   const { t, language } = useLanguage();
+
+  // Cost basis is a settled, historical figure — fetch the USD/THB rate
+  // once on mount and reuse it for every cost/unit conversion, instead of
+  // the display-currency toggle's live rate (refreshed every 60s), which
+  // would otherwise make cost visibly drift even though the recorded THB
+  // cost never changes. Current value/PnL keep tracking the live rate.
+  const [frozenUsdRate, setFrozenUsdRate] = useState<number | null>(null);
+  useEffect(() => {
+    fetchFxRateToThb("USD").then(setFrozenUsdRate);
+  }, []);
+
   const { portfolios, currentPortfolioId, defaultPortfolioId } = usePortfolios();
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [open, setOpen] = useState(false);
@@ -175,7 +187,10 @@ export default function PortfolioPage() {
                   </div>
                   {h.avgCost > 0 && (
                     <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                      {t("portfolio.costBasis")} {formatMoney(h.avgCost)}
+                      {t("portfolio.costBasis")}{" "}
+                      {currency === "USD" && frozenUsdRate
+                        ? formatUsdAt(h.avgCost, frozenUsdRate)
+                        : formatMoney(h.avgCost)}
                     </div>
                   )}
                 </div>
