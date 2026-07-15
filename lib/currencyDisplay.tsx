@@ -14,6 +14,16 @@ import { fetchFxRateToThb } from "@/lib/priceFeed";
 
 export type DisplayCurrency = "THB" | "USD";
 
+// Fixed THB formatting, independent of the user's display-currency
+// preference. Everything the app records (transaction prices, cost basis)
+// is stored in THB; converting a historical/fixed figure like cost basis
+// through formatMoney's live USD/THB rate would make it visibly drift every
+// refresh even though the underlying number never changed. Use this for
+// anything that should read as a stable, already-settled amount.
+export function formatThb(thbValue: number): string {
+  return "฿" + Math.round(thbValue).toLocaleString("en-US");
+}
+
 interface CurrencyContextValue {
   currency: DisplayCurrency;
   setCurrency: (c: DisplayCurrency) => void;
