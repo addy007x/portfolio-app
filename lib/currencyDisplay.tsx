@@ -34,6 +34,15 @@ interface CurrencyContextValue {
   setCurrency: (c: DisplayCurrency) => void;
   formatMoney: (thbValue: number) => string;
   formatSignedMoney: (thbValue: number) => string;
+  // USD/THB rate captured once and never updated again for the rest of the
+  // app session — for figures like cost basis that should read as fixed.
+  // Sourced from the same live-refreshing fetch as formatMoney's rate (see
+  // below), just latched to its first value, so it doesn't cost an extra
+  // network round trip. Lives on the provider (mounted once at the (app)
+  // layout level) rather than on individual pages, so it survives
+  // navigating away and back — a page-local version would silently
+  // re-fetch (and drift) on every remount.
+  frozenUsdRate: number | null;
 }
 
 const CurrencyContext = createContext<CurrencyContextValue | null>(null);
@@ -44,6 +53,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [currency, setCurrencyState] = useState<DisplayCurrency>("THB");
   const [usdRate, setUsdRate] = useState(1);
+  const [frozenUsdRate, setFrozenUsdRate] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -56,7 +66,10 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     async function tick() {
       const rate = await fetchFxRateToThb("USD");
-      if (!cancelled && rate > 0) setUsdRate(rate);
+      if (!cancelled && rate > 0) {
+        setUsdRate(rate);
+        setFrozenUsdRate((prev) => prev ?? rate);
+      }
     }
     tick();
     const interval = setInterval(tick, RATE_REFRESH_MS);
@@ -100,7 +113,9 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <CurrencyContext.Provider value={{ currency, setCurrency, formatMoney, formatSignedMoney }}>
+    <CurrencyContext.Provider
+      value={{ currency, setCurrency, formatMoney, formatSignedMoney, frozenUsdRate }}
+    >
       {children}
     </CurrencyContext.Provider>
   );
