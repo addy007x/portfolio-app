@@ -21,10 +21,39 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "nav.earn": { th: "Earn", en: "Earn" },
   "nav.more": { th: "More", en: "More" },
   "nav.moreSheetTitle": { th: "เมนูเพิ่มเติม", en: "More menu" },
-  "nav.dividends": { th: "เงินปันผล (Dividends)", en: "Dividends" },
+  "nav.plan": { th: "แผนลงทุน (DCA)", en: "Invest plan" },
   "nav.portfolios": { th: "แยกพอร์ต", en: "Split portfolios" },
   "nav.reports": { th: "รายงาน (Reports)", en: "Reports" },
   "nav.settings": { th: "ตั้งค่า (Settings)", en: "Settings" },
+
+  // Yearly investment plan (DCA)
+  "plan.title": { th: "แผนลงทุน", en: "Invest plan" },
+  "plan.belowBudget": {
+    th: "ลงทุนปี {year} ยังต่ำกว่าทุนอีก {amount}",
+    en: "{year} investing is still {amount} below budget",
+  },
+  "plan.metBudget": {
+    th: "ลงทุนปี {year} ครบทุนแล้ว 🎉",
+    en: "{year} budget fully invested 🎉",
+  },
+  "plan.budgetThisYear": { th: "ทุนปีนี้", en: "This year's budget" },
+  "plan.notSavedYet": { th: "ยังไม่ได้บันทึกปีนี้", en: "Not saved for this year yet" },
+  "plan.savedInfo": { th: "บันทึกแผนแล้ว", en: "Plan saved" },
+  "plan.save": { th: "บันทึกแผนปีนี้", en: "Save this year's plan" },
+  "plan.saving": { th: "กำลังบันทึก...", en: "Saving..." },
+  "plan.yearLabel": { th: "ปี (พ.ศ.)", en: "Year (BE)" },
+  "plan.budgetLabel": { th: "ทุนปีนี้ (บาท)", en: "Budget (THB)" },
+  "plan.investedNow": { th: "ตอนนี้", en: "so far" },
+  "plan.buyableNow": { th: "ซื้อได้ตอนนี้", en: "Can buy now" },
+  "plan.overPlan": { th: "เกินแผนแล้ว", en: "Over plan by" },
+  "plan.removeFromPlan": { th: "ลบออกจากแผน", en: "Remove from plan" },
+  "plan.addToPlan": { th: "+ เพิ่ม", en: "+ Add" },
+  "plan.addPlaceholder": { th: "เพิ่มสินทรัพย์เข้าแผน", en: "Add an asset to the plan" },
+  "plan.pctTotal": { th: "รวมสัดส่วน {pct}%", en: "Total allocation {pct}%" },
+  "plan.empty": {
+    th: "ยังไม่มีสินทรัพย์ในแผน เลือกจากรายการด้านบนเพื่อเริ่มวางแผน",
+    en: "No assets in the plan yet. Pick one above to start planning.",
+  },
 
   // Common
   "common.loading": { th: "กำลังโหลด...", en: "Loading..." },

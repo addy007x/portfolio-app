@@ -14,7 +14,7 @@ const PRIMARY = [
 ] as const;
 
 const MORE = [
-  { href: "/dividends", labelKey: "nav.dividends", icon: "paid" },
+  { href: "/plan", labelKey: "nav.plan", icon: "track_changes" },
   { href: "/portfolios", labelKey: "nav.portfolios", icon: "call_split" },
   { href: "/reports", labelKey: "nav.reports", icon: "description" },
   { href: "/settings", labelKey: "nav.settings", icon: "settings" },

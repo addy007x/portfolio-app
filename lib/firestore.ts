@@ -21,6 +21,7 @@ import type {
   ValueSnapshot,
   EarnPosition,
   AssetClass,
+  InvestPlan,
 } from "@/lib/types";
 import { ASSET_CLASS_COLOR, assetClassLabel } from "@/lib/types";
 
@@ -485,6 +486,20 @@ export async function updateUserProfile(
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const snap = await getDoc(doc(db, "users", uid));
   return snap.exists() ? (snap.data() as UserProfile) : null;
+}
+
+// ---- Yearly investment plan (DCA budget split) ----
+// One doc per Buddhist-era year, e.g. users/{uid}/investPlans/2569.
+export async function getInvestPlan(uid: string, beYear: number): Promise<InvestPlan | null> {
+  const snap = await getDoc(doc(db, "users", uid, "investPlans", String(beYear)));
+  return snap.exists() ? (snap.data() as InvestPlan) : null;
+}
+
+export async function saveInvestPlan(uid: string, beYear: number, plan: InvestPlan) {
+  await setDoc(doc(db, "users", uid, "investPlans", String(beYear)), {
+    ...plan,
+    updatedAtMs: Date.now(),
+  });
 }
 
 // ---- Derived aggregates ----

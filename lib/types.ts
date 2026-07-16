@@ -116,6 +116,18 @@ export interface Portfolio {
   targetAmount?: number; // THB, optional goal for this portfolio's total value
 }
 
+// Yearly DCA plan: how this year's budget is split across assets.
+export interface InvestPlanItem {
+  symbol: string;
+  pct: number; // share of the yearly budget, 0-100
+}
+
+export interface InvestPlan {
+  budget: number; // THB for the whole year
+  items: InvestPlanItem[];
+  updatedAtMs?: number;
+}
+
 export interface ValueSnapshot {
   id: string;
   date: string; // YYYY-MM-DD, or a full ISO timestamp for math-generated series
