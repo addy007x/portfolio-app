@@ -46,6 +46,7 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "plan.investedNow": { th: "ตอนนี้", en: "so far" },
   "plan.buyableNow": { th: "ซื้อได้ตอนนี้", en: "Can buy now" },
   "plan.overPlan": { th: "เกินแผนแล้ว", en: "Over plan by" },
+  "plan.done": { th: "ครบแผนแล้ว", en: "Plan met" },
   "plan.removeFromPlan": { th: "ลบออกจากแผน", en: "Remove from plan" },
   "plan.addToPlan": { th: "+ เพิ่ม", en: "+ Add" },
   "plan.addPlaceholder": { th: "เพิ่มสินทรัพย์เข้าแผน", en: "Add an asset to the plan" },

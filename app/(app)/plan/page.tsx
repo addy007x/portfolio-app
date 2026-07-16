@@ -10,7 +10,7 @@ import {
 } from "@/lib/firestore";
 import type { Holding, Transaction } from "@/lib/types";
 import { ASSET_CLASS_COLOR } from "@/lib/types";
-import { Card } from "@/components/Card";
+import { Card, Icon } from "@/components/Card";
 import { AssetIcon } from "@/components/AssetIcon";
 import { FormInput, FormSelect } from "@/components/Modal";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
@@ -237,6 +237,11 @@ export default function PlanPage() {
           const pctNum = parseFloat(r.pct) || 0;
           const target = (budgetNum * pctNum) / 100;
           const remaining = target - invested;
+          // Target met or exceeded: show a check and lock the % input.
+          // Requires an actual allocation (pct > 0) — otherwise a still
+          // unallocated row would count as "met" and lock itself before the
+          // user ever got to set its percentage.
+          const done = budgetNum > 0 && pctNum > 0 && remaining <= 0;
           const assetClass = h?.assetClass ?? "foreign_stock";
           return (
             <Card key={r.symbol} className="!p-3.5">
@@ -248,7 +253,12 @@ export default function PlanPage() {
                   <AssetIcon symbol={r.symbol} assetClass={assetClass} iconUrl={h?.iconUrl} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold truncate">{r.symbol}</div>
+                  <div className="text-sm font-bold truncate flex items-center gap-1">
+                    {r.symbol}
+                    {done && (
+                      <Icon name="check_circle" style={{ fontSize: 15, color: "var(--up)" }} />
+                    )}
+                  </div>
                   <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
                     {formatMoney(invested)} · {t("plan.investedNow")} {investedPct.toFixed(1)}%
                   </div>
@@ -258,33 +268,58 @@ export default function PlanPage() {
                     type="number"
                     step="any"
                     value={r.pct}
+                    disabled={done}
                     onChange={(e) =>
                       mutateRows(
                         displayRows.map((x, i) => (i === idx ? { ...x, pct: e.target.value } : x))
                       )
                     }
                     className="rounded-[10px] px-2 py-1.5 text-sm text-center outline-none"
-                    style={{ background: "var(--surface2)", color: "var(--text)", width: 58 }}
+                    style={{
+                      background: "var(--surface2)",
+                      color: done ? "var(--muted)" : "var(--text)",
+                      width: 58,
+                      opacity: done ? 0.6 : 1,
+                    }}
                   />
                   <span className="text-[11px]" style={{ color: "var(--muted)" }}>
                     %
                   </span>
                 </div>
                 <div className="text-right flex-none" style={{ minWidth: 96 }}>
-                  <div
-                    className="text-sm font-bold"
-                    style={{ color: remaining >= 0 ? "var(--up)" : "var(--down)" }}
-                  >
-                    {formatMoney(Math.abs(remaining))}
-                  </div>
-                  <div
-                    className="text-[10px]"
-                    style={{ color: remaining >= 0 ? "var(--up)" : "var(--down)" }}
-                  >
-                    {remaining >= 0
-                      ? `${t("plan.buyableNow")} ${formatMoney(remaining)}`
-                      : `${t("plan.overPlan")} ${formatMoney(-remaining)}`}
-                  </div>
+                  {done ? (
+                    <>
+                      <div
+                        className="flex items-center justify-end gap-1 text-sm font-bold"
+                        style={{ color: "var(--up)" }}
+                      >
+                        <Icon name="check_circle" style={{ fontSize: 17 }} />
+                        {t("plan.done")}
+                      </div>
+                      {remaining < 0 && (
+                        <div className="text-[10px]" style={{ color: "var(--muted)" }}>
+                          {t("plan.overPlan")} {formatMoney(-remaining)}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        className="text-sm font-bold"
+                        style={{ color: remaining >= 0 ? "var(--up)" : "var(--down)" }}
+                      >
+                        {formatMoney(Math.abs(remaining))}
+                      </div>
+                      <div
+                        className="text-[10px]"
+                        style={{ color: remaining >= 0 ? "var(--up)" : "var(--down)" }}
+                      >
+                        {remaining >= 0
+                          ? `${t("plan.buyableNow")} ${formatMoney(remaining)}`
+                          : `${t("plan.overPlan")} ${formatMoney(-remaining)}`}
+                      </div>
+                    </>
+                  )}
                   <button
                     onClick={() => mutateRows(displayRows.filter((_, i) => i !== idx))}
                     className="text-[10px] font-semibold mt-0.5"
