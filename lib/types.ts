@@ -48,6 +48,11 @@ export interface Holding {
   assetClass: AssetClass;
   quantity: number;
   avgCost: number;
+  // Average cost in USD, fixed at each transaction's entry-time FX rate —
+  // NOT derived from avgCost at view time, so it never drifts with the
+  // live rate. Absent on holdings from before this field existed; the
+  // Portfolio page backfills it once from the then-current rate.
+  avgCostUsd?: number;
   currentPrice: number;
   iconUrl?: string;
   livePrice?: boolean;
@@ -78,6 +83,11 @@ export interface Transaction {
   symbol: string;
   quantity: number;
   price: number;
+  // Price per unit in USD, locked at the FX rate in effect when the
+  // transaction was saved. Lets cost basis display as a permanently fixed
+  // USD figure instead of re-converting THB through the live rate on every
+  // view. Absent on transactions from before this field existed.
+  priceUsd?: number;
   totalValue: number;
   notes?: string;
   portfolioId?: string;

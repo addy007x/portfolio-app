@@ -140,6 +140,13 @@ export default function TransactionsPage() {
 
   // Recomputes a symbol's holding from the given (already up-to-date)
   // transaction list, so edits/deletes never leave quantity/avgCost stale.
+  // A returned rate of 1 is fetchFxRateToThb's failure fallback (THB/USD is
+  // ~30+), so treat anything implausibly low as "rate unavailable".
+  async function fetchUsableUsdRate(): Promise<number | undefined> {
+    const rate = await fetchFxRateToThb("USD");
+    return rate > 1.5 ? rate : undefined;
+  }
+
   async function recomputeHolding(
     uid: string,
     symbol: string,
@@ -147,10 +154,17 @@ export default function TransactionsPage() {
     allTransactions: Transaction[]
   ) {
     const existing = holdings.find((h) => h.symbol === symbol);
-    const stats = computeHoldingStats(allTransactions.filter((t) => t.symbol === symbol));
+    // Fallback rate only fills in legacy transactions that predate
+    // priceUsd; newer ones carry their own locked entry-time USD price.
+    const usdRate = await fetchUsableUsdRate();
+    const stats = computeHoldingStats(
+      allTransactions.filter((t) => t.symbol === symbol),
+      usdRate
+    );
 
     if (existing) {
       const patch: Partial<Holding> = { quantity: stats.quantity, avgCost: stats.avgCost };
+      if (stats.avgCostUsd > 0) patch.avgCostUsd = stats.avgCostUsd;
       if (existing.assetClass === "th_stock") {
         if (stats.lastPrice > 0) patch.currentPrice = stats.lastPrice;
       } else if (!existing.currentPrice) {
@@ -164,6 +178,7 @@ export default function TransactionsPage() {
         assetClass: fallbackAssetClass,
         quantity: stats.quantity,
         avgCost: stats.avgCost,
+        ...(stats.avgCostUsd > 0 ? { avgCostUsd: stats.avgCostUsd } : {}),
         currentPrice: fallbackAssetClass === "th_stock" ? stats.lastPrice : stats.avgCost,
         ...(currentPortfolioId ? { portfolioId: currentPortfolioId } : {}),
       });
@@ -182,12 +197,23 @@ export default function TransactionsPage() {
       const price = rawPrice * rate;
       const totalValue = quantity * price;
 
+      // Lock in the USD price at today's rate so cost basis can display as
+      // a permanently fixed USD figure later, immune to future FX moves.
+      let priceUsd = 0;
+      if (form.currency === "USD") {
+        priceUsd = rawPrice;
+      } else {
+        const usdRate = await fetchUsableUsdRate();
+        if (usdRate) priceUsd = price / usdRate;
+      }
+
       const data = {
         date: form.date,
         type: form.type,
         symbol,
         quantity,
         price,
+        ...(priceUsd > 0 ? { priceUsd } : {}),
         totalValue,
         notes: form.notes,
       };

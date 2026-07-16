@@ -14,12 +14,9 @@ import { fetchFxRateToThb } from "@/lib/priceFeed";
 
 export type DisplayCurrency = "THB" | "USD";
 
-// USD formatting at an explicit, caller-supplied rate — for figures like
-// cost basis that should read as a fixed, settled amount rather than
-// tracking the live rate the way current value/PnL legitimately should.
-// Same "$X.XX" formatting as formatMoney's USD branch.
-export function formatUsdAt(thbValue: number, rate: number): string {
-  const usdValue = thbValue / rate;
+// Plain USD formatting for values that are ALREADY in USD (e.g. a stored
+// avgCostUsd) — same "$X.XX" style as formatMoney's USD branch.
+export function formatUsd(usdValue: number): string {
   return (
     "$" +
     usdValue.toLocaleString("en-US", {
@@ -27,6 +24,13 @@ export function formatUsdAt(thbValue: number, rate: number): string {
       maximumFractionDigits: 2,
     })
   );
+}
+
+// USD formatting at an explicit, caller-supplied rate — for figures like
+// cost basis that should read as a fixed, settled amount rather than
+// tracking the live rate the way current value/PnL legitimately should.
+export function formatUsdAt(thbValue: number, rate: number): string {
+  return formatUsd(thbValue / rate);
 }
 
 interface CurrencyContextValue {

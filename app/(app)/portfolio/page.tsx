@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import {
   watchHoldings,
@@ -19,7 +19,7 @@ import { AssetIcon } from "@/components/AssetIcon";
 import { UnassignedPicker } from "@/components/UnassignedPicker";
 import { Modal, FormInput, FormSelect, SubmitButton } from "@/components/Modal";
 import { formatPct } from "@/lib/format";
-import { useCurrencyDisplay, formatUsdAt } from "@/lib/currencyDisplay";
+import { useCurrencyDisplay, formatUsd, formatUsdAt } from "@/lib/currencyDisplay";
 import { useLanguage } from "@/lib/i18n";
 import { usePortfolios } from "@/lib/portfolioContext";
 
@@ -49,6 +49,22 @@ export default function PortfolioPage() {
     if (!user) return;
     return watchHoldings(user.uid, setAllHoldings);
   }, [user]);
+
+  // One-time backfill: holdings from before avgCostUsd existed get it
+  // pinned in Firestore from the current session's frozen rate. After this
+  // write the figure is permanent — it survives reloads and new sessions,
+  // which the session-frozen rate alone could not (a tab reload used to
+  // latch a fresh rate and the "fixed" cost visibly changed again).
+  const backfilledIds = useRef(new Set<string>());
+  useEffect(() => {
+    if (!user || !frozenUsdRate) return;
+    for (const h of allHoldings) {
+      if (h.avgCost > 0 && !(h.avgCostUsd && h.avgCostUsd > 0) && !backfilledIds.current.has(h.id)) {
+        backfilledIds.current.add(h.id);
+        updateHolding(user.uid, h.id, { avgCostUsd: h.avgCost / frozenUsdRate });
+      }
+    }
+  }, [user, allHoldings, frozenUsdRate]);
 
   const holdings = allHoldings.filter((h) =>
     belongsToPortfolio(h, currentPortfolioId, defaultPortfolioId)
@@ -179,8 +195,15 @@ export default function PortfolioPage() {
                   {h.avgCost > 0 && (
                     <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
                       {t("portfolio.costBasis")}{" "}
-                      {currency === "USD" && frozenUsdRate
-                        ? formatUsdAt(h.avgCost, frozenUsdRate)
+                      {currency === "USD"
+                        ? // Stored fixed figure first (never drifts, survives
+                          // reloads); frozen-rate conversion only until the
+                          // one-time backfill above lands.
+                          h.avgCostUsd && h.avgCostUsd > 0
+                          ? formatUsd(h.avgCostUsd)
+                          : frozenUsdRate
+                            ? formatUsdAt(h.avgCost, frozenUsdRate)
+                            : formatMoney(h.avgCost)
                         : formatMoney(h.avgCost)}
                     </div>
                   )}

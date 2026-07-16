@@ -520,32 +520,52 @@ export interface AllocationSlice {
 export interface HoldingStats {
   quantity: number;
   avgCost: number;
+  // Averaged from each transaction's entry-time priceUsd, so it stays a
+  // fixed historical figure. 0 when no USD prices could be determined.
+  avgCostUsd: number;
   lastPrice: number;
 }
 
 // Recomputed from the full transaction history for one symbol, so editing
 // or deleting a past transaction always leaves quantity/avgCost consistent
 // (rather than incrementally patching them at write time).
-export function computeHoldingStats(transactions: Transaction[]): HoldingStats {
+// `fallbackUsdRate` (THB per USD) approximates priceUsd for transactions
+// saved before that field existed; without it, those transactions simply
+// don't contribute to avgCostUsd.
+export function computeHoldingStats(
+  transactions: Transaction[],
+  fallbackUsdRate?: number
+): HoldingStats {
   const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
   let quantity = 0;
   let costBasis = 0;
+  let costBasisUsd = 0;
   let lastPrice = 0;
   for (const t of sorted) {
     if (t.type === "buy") {
       quantity += t.quantity;
       costBasis += t.quantity * t.price;
+      const priceUsd =
+        t.priceUsd && t.priceUsd > 0
+          ? t.priceUsd
+          : fallbackUsdRate
+            ? t.price / fallbackUsdRate
+            : 0;
+      costBasisUsd += t.quantity * priceUsd;
       lastPrice = t.price;
     } else if (t.type === "sell") {
       const avgCost = quantity > 0 ? costBasis / quantity : 0;
+      const avgCostUsd = quantity > 0 ? costBasisUsd / quantity : 0;
       quantity = Math.max(0, quantity - t.quantity);
       costBasis = quantity > 0 ? quantity * avgCost : 0;
+      costBasisUsd = quantity > 0 ? quantity * avgCostUsd : 0;
       lastPrice = t.price;
     }
   }
   return {
     quantity,
     avgCost: quantity > 0 ? costBasis / quantity : 0,
+    avgCostUsd: quantity > 0 ? costBasisUsd / quantity : 0,
     lastPrice,
   };
 }
