@@ -35,12 +35,6 @@ export default function PlanPage() {
   const [budget, setBudget] = useState("");
   const [rows, setRows] = useState<PlanRow[]>([]);
   const [savedExists, setSavedExists] = useState(false);
-  // The year whose plan has finished loading — comparing against the
-  // selected year doubles as the "loaded" flag without needing a
-  // synchronous setState when the year changes.
-  const [loadedYear, setLoadedYear] = useState<number | null>(null);
-  // Once the user edits anything, stop deriving default rows from holdings.
-  const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [addSymbol, setAddSymbol] = useState("");
 
@@ -68,34 +62,25 @@ export default function PlanPage() {
         setRows(plan.items.map((i) => ({ symbol: i.symbol, pct: String(i.pct) })));
         setSavedExists(true);
       } else {
+        // A year with no saved plan starts genuinely blank — no carry-over
+        // of last year's budget/picks, and no auto-fill from holdings the
+        // user isn't necessarily DCA'ing into this year. Assets are added
+        // explicitly via the picker below, which only offers
+        // transaction-derived holdings.
+        setBudget("");
         setRows([]);
         setSavedExists(false);
       }
-      setTouched(false);
-      setLoadedYear(beYear);
     });
     return () => {
       cancelled = true;
     };
   }, [user, beYear, yearValid]);
 
-  const loaded = loadedYear === beYear;
-
-  // Everything the user could plan for (cash isn't DCA'd into).
+  // Everything the user could plan for (cash isn't DCA'd into). A Holding
+  // doc only exists once its symbol has at least one transaction, so this
+  // list is itself transaction-derived, not a static/manual list.
   const plannableHoldings = holdings.filter((h) => h.assetClass !== "cash");
-
-  // For a year with no saved plan, start from what's actually held (at 0%)
-  // instead of an empty list. Derived at render time — becomes real state
-  // on the first edit — so no setState-in-effect is needed.
-  const displayRows: PlanRow[] =
-    !touched && !savedExists && loaded && rows.length === 0
-      ? plannableHoldings.map((h) => ({ symbol: h.symbol.toUpperCase(), pct: "0" }))
-      : rows;
-
-  function mutateRows(next: PlanRow[]) {
-    setRows(next);
-    setTouched(true);
-  }
 
   const ceYearPrefix = `${beYear - 543}-`;
   function investedThisYear(symbol: string): number {
@@ -110,11 +95,11 @@ export default function PlanPage() {
   }
 
   const budgetNum = parseFloat(budget) || 0;
-  const totalInvested = displayRows.reduce((sum, r) => sum + investedThisYear(r.symbol), 0);
+  const totalInvested = rows.reduce((sum, r) => sum + investedThisYear(r.symbol), 0);
   const remainingBudget = budgetNum - totalInvested;
-  const pctSum = displayRows.reduce((sum, r) => sum + (parseFloat(r.pct) || 0), 0);
+  const pctSum = rows.reduce((sum, r) => sum + (parseFloat(r.pct) || 0), 0);
 
-  const inPlan = new Set(displayRows.map((r) => r.symbol.toUpperCase()));
+  const inPlan = new Set(rows.map((r) => r.symbol.toUpperCase()));
   const addable = plannableHoldings.filter((h) => !inPlan.has(h.symbol.toUpperCase()));
 
   function holdingFor(symbol: string): Holding | undefined {
@@ -127,14 +112,11 @@ export default function PlanPage() {
     try {
       await saveInvestPlan(user.uid, beYear, {
         budget: budgetNum,
-        items: displayRows.map((r) => ({
+        items: rows.map((r) => ({
           symbol: r.symbol.toUpperCase(),
           pct: parseFloat(r.pct) || 0,
         })),
       });
-      // Whatever was showing (possibly holdings-derived defaults) is now
-      // the saved plan — promote it to real state.
-      setRows(displayRows);
       setSavedExists(true);
     } finally {
       setSaving(false);
@@ -206,7 +188,7 @@ export default function PlanPage() {
           <button
             onClick={() => {
               if (!addSymbol) return;
-              mutateRows([...displayRows, { symbol: addSymbol, pct: "0" }]);
+              setRows([...rows, { symbol: addSymbol, pct: "0" }]);
               setAddSymbol("");
             }}
             className="rounded-[12px] px-4 py-2.5 text-sm font-bold flex-none"
@@ -225,12 +207,12 @@ export default function PlanPage() {
       </div>
 
       <div className="flex flex-col gap-2.5">
-        {displayRows.length === 0 && (
+        {rows.length === 0 && (
           <div className="text-sm text-center py-8" style={{ color: "var(--muted)" }}>
             {t("plan.empty")}
           </div>
         )}
-        {displayRows.map((r, idx) => {
+        {rows.map((r, idx) => {
           const h = holdingFor(r.symbol);
           const invested = investedThisYear(r.symbol);
           const investedPct = budgetNum > 0 ? (invested / budgetNum) * 100 : 0;
@@ -270,8 +252,8 @@ export default function PlanPage() {
                     value={r.pct}
                     disabled={done}
                     onChange={(e) =>
-                      mutateRows(
-                        displayRows.map((x, i) => (i === idx ? { ...x, pct: e.target.value } : x))
+                      setRows(
+                        rows.map((x, i) => (i === idx ? { ...x, pct: e.target.value } : x))
                       )
                     }
                     className="rounded-[10px] px-2 py-1.5 text-sm text-center outline-none"
@@ -321,7 +303,7 @@ export default function PlanPage() {
                     </>
                   )}
                   <button
-                    onClick={() => mutateRows(displayRows.filter((_, i) => i !== idx))}
+                    onClick={() => setRows(rows.filter((_, i) => i !== idx))}
                     className="text-[10px] font-semibold mt-0.5"
                     style={{ color: "var(--down)" }}
                   >
