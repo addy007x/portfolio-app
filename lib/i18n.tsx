@@ -37,9 +37,10 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "analysis.sourceTh": { th: "หุ้นไทย", en: "Thai stock" },
   "analysis.loading": { th: "กำลังโหลดข้อมูลกราฟ...", en: "Loading chart data..." },
   "analysis.noData": {
-    th: "ไม่พบข้อมูลของสัญลักษณ์นี้ ลองตรวจสอบสัญลักษณ์หรือประเภทสินทรัพย์",
-    en: "No data found for this symbol. Check the symbol or asset type.",
+    th: "ไม่พบข้อมูลของสัญลักษณ์นี้ อาจเป็นเพราะสัญลักษณ์ไม่ถูกต้อง หรือแหล่งข้อมูลขัดข้องชั่วคราว",
+    en: "No data found for this symbol — either the symbol is wrong, or the data source hiccuped momentarily.",
   },
+  "analysis.retry": { th: "ลองอีกครั้ง", en: "Retry" },
   "analysis.price": { th: "ราคาปัจจุบัน", en: "Current price" },
   "analysis.breakout": { th: "Breakout ทะลุแนวต้าน!", en: "Breakout above resistance!" },
   "analysis.breakdown": { th: "Breakdown หลุดแนวรับ!", en: "Breakdown below support!" },

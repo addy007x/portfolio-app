@@ -93,6 +93,18 @@ async function fetchJson(url: string, init?: RequestInit) {
   return res.json();
 }
 
+// One retry after a short delay — smooths over the transient 429s/timeouts
+// Binance and Yahoo occasionally return under load, so a blank chart isn't
+// the first thing a user sees on an ordinary hiccup.
+async function fetchJsonRetrying(url: string, init?: RequestInit) {
+  try {
+    return await fetchJson(url, init);
+  } catch {
+    await new Promise((r) => setTimeout(r, 400));
+    return fetchJson(url, init);
+  }
+}
+
 async function resolveCryptoId(symbol: string): Promise<string | null> {
   if (CRYPTO_ID_MAP[symbol]) return CRYPTO_ID_MAP[symbol];
   const cached = cryptoIdCache.get(symbol);
@@ -312,7 +324,7 @@ async function fetchCandlesFromYahoo(
   yahooSymbol: string,
   cfg: (typeof CANDLE_INTERVALS)[string]
 ): Promise<Candle[]> {
-  const data = await fetchJson(
+  const data = await fetchJsonRetrying(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${cfg.yahoo}&range=${cfg.yahooRange}`,
     { headers: { "User-Agent": "Mozilla/5.0" } }
   );
@@ -352,7 +364,7 @@ async function fetchCandles(
   let candles: Candle[] = [];
   try {
     if (source === "crypto" && !CRYPTO_VIA_YAHOO.has(symbol)) {
-      const data = (await fetchJson(
+      const data = (await fetchJsonRetrying(
         `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${cfg.binance}&limit=${cfg.binanceLimit}`
       )) as Array<[number, string, string, string, string, ...unknown[]]>;
       candles = data
@@ -362,7 +374,7 @@ async function fetchCandles(
         )
         .filter((c) => c.every(Number.isFinite));
     } else if (source === "crypto") {
-      // USDT/USDC: no Binance self-pair, so quote against USD on Yahoo.
+      // USDT: no Binance self-pair, so quote against USD on Yahoo.
       candles = await fetchCandlesFromYahoo(`${symbol}-USD`, cfg);
     } else {
       const yahooSymbol = source === "th" ? (symbol.endsWith(".BK") ? symbol : `${symbol}.BK`) : symbol;

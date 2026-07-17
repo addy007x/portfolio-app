@@ -106,6 +106,11 @@ export default function AnalysisPage() {
 
   const symbolKey = symbol ? `${source}:${symbol}` : "";
 
+  // Bumped by the retry button below to force a re-fetch of the same
+  // symbol — a plain data provider hiccup (rate limit, timeout) shouldn't
+  // require switching symbols/timeframes just to try again.
+  const [retryTick, setRetryTick] = useState(0);
+
   // Fetch every timeframe for the active symbol (the multi-TF summary needs
   // them all anyway; the server caches candles for 2 minutes).
   useEffect(() => {
@@ -126,7 +131,7 @@ export default function AnalysisPage() {
     return () => {
       cancelled = true;
     };
-  }, [symbolKey]);
+  }, [symbolKey, retryTick]);
 
   const loaded = loadedKey === symbolKey;
   const candles: Candle[] = useMemo(
@@ -370,7 +375,14 @@ export default function AnalysisPage() {
           </div>
         ) : !analysis ? (
           <div className="text-sm text-center py-10" style={{ color: "var(--muted)" }}>
-            {t("analysis.noData")}
+            <div className="mb-3">{t("analysis.noData")}</div>
+            <button
+              onClick={() => setRetryTick((n) => n + 1)}
+              className="px-4 py-2 rounded-[10px] text-[12.5px] font-bold"
+              style={{ background: "var(--surface2)", color: "var(--accent)" }}
+            >
+              {t("analysis.retry")}
+            </button>
           </div>
         ) : (
           <>
