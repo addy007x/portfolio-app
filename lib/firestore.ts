@@ -315,12 +315,16 @@ export function earnPositionValue(
 // the coin's own price movement, unlike earnPositionValue's total PnL, so
 // this is the number that actually answers "how much interest have I
 // earned from Earn," independent of whether the coin itself went up or down.
+// The baseline is depositQuantity (the true original deposit) when present:
+// after an edit rebases the position, `quantity` includes interest accrued
+// before the edit, and using it as the baseline would silently zero out the
+// lifetime figure on every edit.
 export function earnPositionInterestEarned(
   p: EarnPosition,
   priceMap: EarnPriceMap,
   asOf: Date = new Date()
 ): number {
-  const interestQty = earnPositionQuantity(p, asOf) - p.quantity;
+  const interestQty = earnPositionQuantity(p, asOf) - (p.depositQuantity ?? p.quantity);
   return interestQty * priceFor(p, priceMap);
 }
 
@@ -393,7 +397,12 @@ export function computeEarnSummary(
   asOf: Date = new Date(),
   rangeStart?: Date
 ): EarnSummary {
-  const totalPrincipal = positions.reduce((s, p) => s + p.quantity * p.costBasisPrice, 0);
+  // Principal = the true original deposits (see earnPositionInterestEarned
+  // on why rebased `quantity` can't be the baseline).
+  const totalPrincipal = positions.reduce(
+    (s, p) => s + (p.depositQuantity ?? p.quantity) * p.costBasisPrice,
+    0
+  );
   const totalValue = positions.reduce((s, p) => s + earnPositionValue(p, priceMap, asOf), 0);
   const totalInterestEarned = positions.reduce(
     (s, p) => s + earnPositionInterestEarned(p, priceMap, asOf),

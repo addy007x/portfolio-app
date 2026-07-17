@@ -8,6 +8,7 @@ import {
   updateEarnPosition,
   deleteEarnPosition,
   computeEarnSummary,
+  earnPositionQuantity,
   groupEarnPositionsBySymbol,
   migrateLegacyEarnPosition,
 } from "@/lib/firestore";
@@ -96,11 +97,15 @@ export default function EarnPage() {
   function openEdit(p: EarnPosition) {
     setEditing(p);
     setEditFormError(null);
+    // The quantity shown is TODAY'S compounded balance, and the date is
+    // today: saving rebases the position here, so the edit applies from
+    // this day forward instead of rewriting accrual since the original
+    // start date.
     setEditForm({
       apy: String(p.apy),
-      quantity: String(p.quantity),
+      quantity: String(Number(earnPositionQuantity(p, new Date()).toFixed(8))),
       costBasisPrice: String(p.costBasisPrice),
-      startDate: p.startDate,
+      startDate: new Date().toISOString().slice(0, 10),
     });
   }
 
@@ -119,11 +124,28 @@ export default function EarnPage() {
     }
     setEditSubmitting(true);
     try {
+      // Rebase at the chosen effective date: the entered quantity is the
+      // balance from that day, and the (possibly new) APY compounds from
+      // there. Interest accrued before the edit is preserved by adjusting
+      // depositQuantity so newBalance − newDeposit still equals the
+      // interest earned to date — the lifetime figure doesn't reset.
+      const effectiveDate = editForm.startDate;
+      const newBalance = parseFloat(editForm.quantity) || 0;
+      const oldDeposit = editing.depositQuantity ?? editing.quantity;
+      // For a same-day edit (the default), accrue up to this instant — the
+      // prefilled balance was computed "as of now", and parsing the bare
+      // date would land on UTC midnight, hours behind, leaking a few
+      // hours' interest into the deposit baseline.
+      const today = new Date().toISOString().slice(0, 10);
+      const accruedAsOf = effectiveDate === today ? new Date() : new Date(effectiveDate);
+      const accruedSoFar = Math.max(0, earnPositionQuantity(editing, accruedAsOf) - oldDeposit);
       await updateEarnPosition(user.uid, editing.id, {
         apy: parseFloat(editForm.apy) || 0,
-        quantity: parseFloat(editForm.quantity) || 0,
+        quantity: newBalance,
         costBasisPrice,
-        startDate: editForm.startDate,
+        startDate: effectiveDate,
+        depositQuantity: newBalance - accruedSoFar,
+        originalStartDate: editing.originalStartDate ?? editing.startDate,
       });
       setEditing(null);
     } finally {
@@ -275,7 +297,8 @@ export default function EarnPage() {
                     .map((p) => (
                       <div key={p.id} className="flex items-center justify-between gap-2 text-[12px]">
                         <div className="min-w-0 truncate" style={{ color: "var(--muted)" }}>
-                          {formatCoinQty(p.quantity)} {p.symbol} · {p.apy}% APY · {t("earn.startedOn")} {p.startDate}
+                          {formatCoinQty(p.quantity)} {p.symbol} · {p.apy}% APY ·{" "}
+                          {t("earn.startedOn")} {p.originalStartDate ?? p.startDate}
                         </div>
                         <div className="flex items-center gap-2 flex-none">
                           <button onClick={() => openEdit(p)} style={{ color: "var(--muted)" }}>
@@ -364,7 +387,7 @@ export default function EarnPage() {
               onChange={(e) => setEditForm({ ...editForm, apy: e.target.value })}
             />
             <FormInput
-              label={`${t("earn.startingQuantity")}${editing ? ` (${editing.symbol})` : ""}`}
+              label={`${t("earn.currentQuantity")}${editing ? ` (${editing.symbol})` : ""}`}
               type="number"
               step="any"
               required
@@ -382,7 +405,7 @@ export default function EarnPage() {
               onChange={(e) => setEditForm({ ...editForm, costBasisPrice: e.target.value })}
             />
             <FormInput
-              label={t("earn.startDate")}
+              label={t("earn.effectiveDate")}
               type="date"
               required
               value={editForm.startDate}

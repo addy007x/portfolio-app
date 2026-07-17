@@ -310,7 +310,8 @@ export default function TransactionsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold truncate">{tr("transactions.startedEarn")} {p.symbol}</div>
                     <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                      {formatThaiDate(p.startDate, language)} · {p.apy}% APY · {tr("transactions.deposited")} {p.quantity} {p.symbol}
+                      {formatThaiDate(p.originalStartDate ?? p.startDate, language)} · {p.apy}% APY ·{" "}
+                      {tr("transactions.deposited")} {p.depositQuantity ?? p.quantity} {p.symbol}
                     </div>
                   </div>
                   <div className="text-right flex-none">

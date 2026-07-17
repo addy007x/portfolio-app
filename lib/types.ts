@@ -140,8 +140,21 @@ export interface ValueSnapshot {
 export interface EarnPosition {
   id: string;
   symbol: string;
-  quantity: number; // coin units deposited; interest compounds in this same coin
+  // Coin balance as of `startDate`; interest compounds on this from that
+  // date. After an edit this is the rebased balance at the edit's
+  // effective date (accrued interest locked in), NOT the original deposit.
+  quantity: number;
   costBasisPrice: number; // THB per unit at deposit time, for cost/gain display
   apy: number; // percent, e.g. 5.2
+  // Date `quantity`/`apy` take effect — the original start, or the
+  // effective date of the latest edit (each edit rebases here so new
+  // values apply forward only, never rewriting past accrual).
   startDate: string; // YYYY-MM-DD
+  // Original deposited coins — the baseline for "interest earned so far",
+  // preserved across edits. Absent on positions never edited (falls back
+  // to `quantity`, which still equals the deposit in that case).
+  depositQuantity?: number;
+  // The very first start date, kept for display after edits move
+  // `startDate` to the rebase point.
+  originalStartDate?: string;
 }
