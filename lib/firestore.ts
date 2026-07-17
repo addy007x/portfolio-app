@@ -22,6 +22,7 @@ import type {
   EarnPosition,
   AssetClass,
   InvestPlan,
+  PriceAlert,
 } from "@/lib/types";
 import { ASSET_CLASS_COLOR, assetClassLabel } from "@/lib/types";
 
@@ -118,6 +119,30 @@ export async function updateDividend(
 
 export async function deleteDividend(uid: string, id: string) {
   await deleteDoc(doc(db, "users", uid, "dividends", id));
+}
+
+// ---- Price alerts (analysis page; levels in native quote currency) ----
+export function watchPriceAlerts(uid: string, cb: (items: PriceAlert[]) => void) {
+  const q = query(userCollection(uid, "priceAlerts"), orderBy("createdAtMs", "desc"));
+  return onSnapshot(q, (snap) => {
+    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as PriceAlert));
+  });
+}
+
+export async function addPriceAlert(uid: string, data: Omit<PriceAlert, "id">) {
+  await addDoc(userCollection(uid, "priceAlerts"), data);
+}
+
+export async function updatePriceAlert(
+  uid: string,
+  id: string,
+  data: Partial<Omit<PriceAlert, "id">>
+) {
+  await updateDoc(doc(db, "users", uid, "priceAlerts", id), data);
+}
+
+export async function deletePriceAlert(uid: string, id: string) {
+  await deleteDoc(doc(db, "users", uid, "priceAlerts", id));
 }
 
 // ---- Portfolios (multi-portfolio segregation) ----
@@ -483,6 +508,9 @@ export interface UserProfile {
   defaultPortfolioId?: string;
   // Privacy toggle: mask money amounts on the Dashboard (eye icon).
   hideDashboardAmounts?: boolean;
+  // LINE Messaging API credentials for price alerts (user's own channel).
+  lineToken?: string;
+  lineUserId?: string;
 }
 
 export async function updateUserProfile(

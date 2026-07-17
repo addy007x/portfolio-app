@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { updateUserProfile } from "@/lib/firestore";
+import { getUserProfile, updateUserProfile } from "@/lib/firestore";
 import { Card, Icon } from "@/components/Card";
+import { FormInput } from "@/components/Modal";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 import { useLanguage, type Language } from "@/lib/i18n";
 import { useTheme, type ThemePreference } from "@/lib/themeContext";
@@ -16,10 +17,31 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const router = useRouter();
   const [name, setName] = useState(user?.displayName ?? "");
+  const [lineToken, setLineToken] = useState("");
+  const [lineUserId, setLineUserId] = useState("");
+  const [lineSaved, setLineSaved] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    getUserProfile(user.uid).then((p) => {
+      if (p?.lineToken) setLineToken(p.lineToken);
+      if (p?.lineUserId) setLineUserId(p.lineUserId);
+    });
+  }, [user]);
 
   async function handleSaveName() {
     if (!user) return;
     await updateUserProfile(user.uid, { name });
+  }
+
+  async function handleSaveLine() {
+    if (!user) return;
+    await updateUserProfile(user.uid, {
+      lineToken: lineToken.trim(),
+      lineUserId: lineUserId.trim(),
+    });
+    setLineSaved(true);
+    setTimeout(() => setLineSaved(false), 2000);
   }
 
   return (
@@ -111,6 +133,36 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
+        </div>
+      </Card>
+
+      <Card className="mt-3">
+        <div className="flex items-center gap-2 mb-1">
+          <Icon name="notifications" style={{ fontSize: 20, color: "var(--muted)" }} />
+          <span className="text-sm font-bold">{t("settings.lineTitle")}</span>
+        </div>
+        <div className="text-[11px] mb-3" style={{ color: "var(--muted)" }}>
+          {t("settings.lineHelp")}
+        </div>
+        <div className="flex flex-col gap-3">
+          <FormInput
+            label={t("settings.lineToken")}
+            type="password"
+            value={lineToken}
+            onChange={(e) => setLineToken(e.target.value)}
+          />
+          <FormInput
+            label={t("settings.lineUserId")}
+            value={lineUserId}
+            onChange={(e) => setLineUserId(e.target.value)}
+          />
+          <button
+            onClick={handleSaveLine}
+            className="rounded-[12px] py-2.5 text-sm font-bold"
+            style={{ background: "var(--accent)", color: "#04120c" }}
+          >
+            {lineSaved ? t("settings.lineSaved") : t("settings.lineSave")}
+          </button>
         </div>
       </Card>
 

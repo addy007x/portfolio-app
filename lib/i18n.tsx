@@ -22,9 +22,62 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "nav.more": { th: "More", en: "More" },
   "nav.moreSheetTitle": { th: "เมนูเพิ่มเติม", en: "More menu" },
   "nav.plan": { th: "แผนลงทุน (DCA)", en: "Invest plan" },
+  "nav.analysis": { th: "วิเคราะห์", en: "Analysis" },
   "nav.portfolios": { th: "แยกพอร์ต", en: "Split portfolios" },
   "nav.reports": { th: "รายงาน (Reports)", en: "Reports" },
   "nav.settings": { th: "ตั้งค่า (Settings)", en: "Settings" },
+
+  // Technical analysis
+  "analysis.title": { th: "วิเคราะห์", en: "Analysis" },
+  "analysis.symbolLabel": { th: "สินทรัพย์ (หุ้น / คริปโต)", en: "Asset (stock / crypto)" },
+  "analysis.customSymbol": { th: "กรอกสัญลักษณ์เอง…", en: "Custom symbol…" },
+  "analysis.customPlaceholder": { th: "สัญลักษณ์ เช่น BTC, AAPL, PTT", en: "Symbol e.g. BTC, AAPL, PTT" },
+  "analysis.sourceCrypto": { th: "คริปโต", en: "Crypto" },
+  "analysis.sourceUs": { th: "หุ้นนอก", en: "US stock" },
+  "analysis.sourceTh": { th: "หุ้นไทย", en: "Thai stock" },
+  "analysis.loading": { th: "กำลังโหลดข้อมูลกราฟ...", en: "Loading chart data..." },
+  "analysis.noData": {
+    th: "ไม่พบข้อมูลของสัญลักษณ์นี้ ลองตรวจสอบสัญลักษณ์หรือประเภทสินทรัพย์",
+    en: "No data found for this symbol. Check the symbol or asset type.",
+  },
+  "analysis.price": { th: "ราคาปัจจุบัน", en: "Current price" },
+  "analysis.breakout": { th: "Breakout ทะลุแนวต้าน!", en: "Breakout above resistance!" },
+  "analysis.breakdown": { th: "Breakdown หลุดแนวรับ!", en: "Breakdown below support!" },
+  "analysis.inRange": { th: "อยู่ในกรอบ", en: "In range" },
+  "analysis.levelsTitle": { th: "แนวรับ / แนวต้าน", en: "Support / Resistance" },
+  "analysis.resistance": { th: "แนวต้าน", en: "Resistance" },
+  "analysis.support": { th: "แนวรับ", en: "Support" },
+  "analysis.breakAlertBtn": {
+    th: "ตั้งเตือน Breakout / Breakdown อัตโนมัติ",
+    en: "Auto-alert on Breakout / Breakdown",
+  },
+  "analysis.pivotTitle": { th: "Pivot Points (คำนวณอัตโนมัติ)", en: "Pivot Points (auto)" },
+  "analysis.fibTitle": { th: "Fibonacci Retracement", en: "Fibonacci Retracement" },
+  "analysis.trendTitle": { th: "แนวโน้ม", en: "Trend" },
+  "analysis.trendUp": { th: "ขาขึ้น", en: "Uptrend" },
+  "analysis.trendDown": { th: "ขาลง", en: "Downtrend" },
+  "analysis.trendSide": { th: "ไซด์เวย์", en: "Sideways" },
+  "analysis.indicatorsTitle": { th: "อินดิเคเตอร์", en: "Indicators" },
+  "analysis.overbought": { th: "ซื้อมากเกิน", en: "Overbought" },
+  "analysis.oversold": { th: "ขายมากเกิน", en: "Oversold" },
+  "analysis.neutralZone": { th: "โซนกลาง", en: "Neutral" },
+  "analysis.bullish": { th: "กระทิง (Bullish)", en: "Bullish" },
+  "analysis.bearish": { th: "หมี (Bearish)", en: "Bearish" },
+  "analysis.mtfTitle": { th: "วิเคราะห์หลาย Timeframe", en: "Multi-timeframe view" },
+  "analysis.alertsTitle": { th: "การแจ้งเตือนราคา (LINE)", en: "Price alerts (LINE)" },
+  "analysis.alertNote": {
+    th: "แตะกระดิ่งที่ระดับราคาเพื่อตั้งเตือน · ระบบเช็คราคาทุก 1 นาทีขณะเปิดแอปอยู่ และเตือนซ้ำระดับเดิมได้ทุก 6 ชั่วโมง",
+    en: "Tap a bell next to any level to set an alert · prices are checked every minute while the app is open; the same level re-alerts at most every 6 hours",
+  },
+  "analysis.noAlerts": {
+    th: "ยังไม่มีการแจ้งเตือน",
+    en: "No alerts yet",
+  },
+  "analysis.lineNotConfigured": {
+    th: "⚙️ ยังไม่ได้ตั้งค่า LINE — แตะเพื่อไปใส่ Channel Token และ User ID ในหน้าตั้งค่า",
+    en: "⚙️ LINE not configured — tap to add your Channel Token and User ID in Settings",
+  },
+  "analysis.fired": { th: "แจ้งแล้ว", en: "fired" },
 
   // Yearly investment plan (DCA)
   "plan.title": { th: "แผนลงทุน", en: "Invest plan" },
@@ -321,6 +374,15 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "settings.currencyThb": { th: "บาท", en: "THB" },
   "settings.currencyUsd": { th: "USD", en: "USD" },
   "settings.logout": { th: "ออกจากระบบ", en: "Log out" },
+  "settings.lineTitle": { th: "แจ้งเตือนผ่าน LINE", en: "LINE notifications" },
+  "settings.lineHelp": {
+    th: "สร้าง LINE Official Account แล้วเปิดใช้ Messaging API จากนั้นนำ Channel Access Token และ User ID ของคุณ (ดูได้จากหน้า Basic settings ของ LINE Developers) มาใส่ เพื่อให้ระบบส่งแจ้งเตือนราคาเข้า LINE ได้",
+    en: "Create a LINE Official Account with the Messaging API enabled, then paste your Channel Access Token and your User ID (from the LINE Developers Basic settings page) so price alerts can be pushed to LINE.",
+  },
+  "settings.lineToken": { th: "Channel Access Token", en: "Channel Access Token" },
+  "settings.lineUserId": { th: "LINE User ID (ขึ้นต้นด้วย U)", en: "LINE User ID (starts with U)" },
+  "settings.lineSave": { th: "บันทึกการตั้งค่า LINE", en: "Save LINE settings" },
+  "settings.lineSaved": { th: "บันทึกแล้ว ✓", en: "Saved ✓" },
 };
 
 interface LanguageContextValue {

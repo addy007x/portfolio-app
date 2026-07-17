@@ -70,6 +70,7 @@ const TTL = {
   dividends: 6 * 60 * 60_000,
   binanceTickers: 25_000,
   history: 5 * 60_000,
+  candles: 2 * 60_000,
 };
 
 const cryptoPriceCache = makeTtlCache<number | null>();
@@ -83,6 +84,8 @@ const dividendsCache = makeTtlCache<Array<{ exDate: string; amountPerShare: numb
 const binanceTickersCache = makeTtlCache<Map<string, number>>();
 // Historical series, keyed "yahoo:SYM:range" / "binance:SYM:range".
 const historyCache = makeTtlCache<Array<[number, number]>>();
+// OHLC candles for the analysis page: [epochMs, open, high, low, close].
+const candlesCache = makeTtlCache<Array<[number, number, number, number, number]>>();
 
 async function fetchJson(url: string, init?: RequestInit) {
   const res = await fetch(url, { ...init, cache: "no-store" });
@@ -283,6 +286,100 @@ async function fetchBinanceHistory(
   }
 }
 
+// ---- OHLC candles for technical analysis ----
+type Candle = [number, number, number, number, number]; // [ms, o, h, l, c]
+
+// Interval mapping per provider. Yahoo has no native 4h — fetched as 60m
+// and aggregated in groups of 4 below.
+const CANDLE_INTERVALS: Record<
+  string,
+  { binance: string; binanceLimit: number; yahoo: string; yahooRange: string; aggregate: number }
+> = {
+  "15m": { binance: "15m", binanceLimit: 300, yahoo: "15m", yahooRange: "1mo", aggregate: 1 },
+  "1h": { binance: "1h", binanceLimit: 300, yahoo: "60m", yahooRange: "3mo", aggregate: 1 },
+  "4h": { binance: "4h", binanceLimit: 300, yahoo: "60m", yahooRange: "1y", aggregate: 4 },
+  "1d": { binance: "1d", binanceLimit: 365, yahoo: "1d", yahooRange: "1y", aggregate: 1 },
+  "1w": { binance: "1w", binanceLimit: 260, yahoo: "1wk", yahooRange: "5y", aggregate: 1 },
+};
+
+async function fetchCandles(
+  symbol: string,
+  source: "crypto" | "us" | "th",
+  intervalKey: string
+): Promise<Candle[]> {
+  const cfg = CANDLE_INTERVALS[intervalKey];
+  const cacheKey = `candles:${source}:${symbol}:${intervalKey}`;
+  const cached = candlesCache.get(cacheKey);
+  if (cached) return cached;
+
+  let candles: Candle[] = [];
+  try {
+    if (source === "crypto") {
+      const data = (await fetchJson(
+        `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${cfg.binance}&limit=${cfg.binanceLimit}`
+      )) as Array<[number, string, string, string, string, ...unknown[]]>;
+      candles = data
+        .map(
+          (k) =>
+            [k[0], parseFloat(k[1]), parseFloat(k[2]), parseFloat(k[3]), parseFloat(k[4])] as Candle
+        )
+        .filter((c) => c.every(Number.isFinite));
+    } else {
+      const yahooSymbol = source === "th" ? (symbol.endsWith(".BK") ? symbol : `${symbol}.BK`) : symbol;
+      const data = await fetchJson(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${cfg.yahoo}&range=${cfg.yahooRange}`,
+        { headers: { "User-Agent": "Mozilla/5.0" } }
+      );
+      const result = data?.chart?.result?.[0];
+      const ts: number[] = result?.timestamp ?? [];
+      const q = result?.indicators?.quote?.[0] ?? {};
+      const raw: Candle[] = [];
+      for (let i = 0; i < ts.length; i++) {
+        const candle: Candle = [ts[i] * 1000, q.open?.[i], q.high?.[i], q.low?.[i], q.close?.[i]];
+        if (candle.every((v) => typeof v === "number" && Number.isFinite(v))) raw.push(candle);
+      }
+      if (cfg.aggregate > 1) {
+        for (let i = 0; i < raw.length; i += cfg.aggregate) {
+          const group = raw.slice(i, i + cfg.aggregate);
+          candles.push([
+            group[0][0],
+            group[0][1],
+            Math.max(...group.map((c) => c[2])),
+            Math.min(...group.map((c) => c[3])),
+            group[group.length - 1][4],
+          ]);
+        }
+      } else {
+        candles = raw;
+      }
+    }
+  } catch {
+    return [];
+  }
+  if (candles.length) candlesCache.set(cacheKey, candles, TTL.candles);
+  return candles;
+}
+
+// Latest price in the asset's NATIVE quote currency (USDT/USD/THB) — the
+// analysis page and price alerts work in native prices, unlike the rest of
+// the app which converts everything to THB.
+async function fetchNativeQuote(symbol: string, source: "crypto" | "us" | "th"): Promise<number | null> {
+  if (source === "crypto") {
+    if (symbol === "USDT") return 1;
+    const map = await getBinanceUsdtPrices();
+    return map.get(symbol) ?? null;
+  }
+  const yahooSymbol = source === "th" ? (symbol.endsWith(".BK") ? symbol : `${symbol}.BK`) : symbol;
+  const cacheKey = `native:${source}:${symbol}`;
+  const cached = stockPriceCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const price = await fetchYahooPrice(yahooSymbol);
+  stockPriceCache.set(cacheKey, price, TTL.stockPrice);
+  return price;
+}
+
+const CANDLE_SOURCES = new Set(["crypto", "us", "th"]);
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const parse = (name: string) =>
@@ -300,6 +397,17 @@ export async function GET(req: NextRequest) {
   const historyCrypto = parse("historyCrypto");
   const historyRangeParam = (searchParams.get("historyRange") ?? "").toLowerCase();
   const historyRange = HISTORY_RANGES[historyRangeParam] ? historyRangeParam : null;
+  const candleSymbol = (searchParams.get("candles") ?? "").trim().toUpperCase();
+  const candleSourceParam = (searchParams.get("candleSource") ?? "").toLowerCase();
+  const candleIntervalParam = (searchParams.get("candleInterval") ?? "").toLowerCase();
+  // "SYM:source" pairs, e.g. nativeQuotes=BTC:crypto,AAPL:us,PTT:th
+  const nativeQuoteReqs = (searchParams.get("nativeQuotes") ?? "")
+    .split(",")
+    .map((s) => {
+      const [sym, src] = s.split(":");
+      return { symbol: (sym ?? "").trim().toUpperCase(), source: (src ?? "").trim().toLowerCase() };
+    })
+    .filter((r) => r.symbol && CANDLE_SOURCES.has(r.source));
 
   const crypto: Record<string, number | null> = {};
   const cryptoIcons: Record<string, string | null> = {};
@@ -542,5 +650,38 @@ export async function GET(req: NextRequest) {
     await Promise.all(jobs);
   }
 
-  return Response.json({ crypto, cryptoIcons, stocks, thStocks, fx, dividends, history });
+  // ---- OHLC candles + native-currency quotes (analysis page & alerts) ----
+  let candles: Candle[] | undefined;
+  if (
+    candleSymbol &&
+    CANDLE_SOURCES.has(candleSourceParam) &&
+    CANDLE_INTERVALS[candleIntervalParam]
+  ) {
+    candles = await fetchCandles(
+      candleSymbol,
+      candleSourceParam as "crypto" | "us" | "th",
+      candleIntervalParam
+    );
+  }
+
+  const nativeQuotes: Record<string, number | null> = {};
+  if (nativeQuoteReqs.length) {
+    await Promise.all(
+      nativeQuoteReqs.map(async (r) => {
+        nativeQuotes[r.symbol] = await fetchNativeQuote(r.symbol, r.source as "crypto" | "us" | "th");
+      })
+    );
+  }
+
+  return Response.json({
+    crypto,
+    cryptoIcons,
+    stocks,
+    thStocks,
+    fx,
+    dividends,
+    history,
+    ...(candles !== undefined ? { candles } : {}),
+    ...(nativeQuoteReqs.length ? { nativeQuotes } : {}),
+  });
 }

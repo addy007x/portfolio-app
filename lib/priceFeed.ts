@@ -123,6 +123,48 @@ export async function fetchCryptoPricesAndIcons(
   }
 }
 
+// ---- Technical-analysis data (native quote currency, not THB) ----
+export type AnalysisSource = "crypto" | "us" | "th";
+
+// [epochMs, open, high, low, close] — matches lib/technical.ts's Candle.
+export type OhlcCandle = [number, number, number, number, number];
+
+export async function fetchCandles(
+  symbol: string,
+  source: AnalysisSource,
+  interval: string
+): Promise<OhlcCandle[]> {
+  try {
+    const params = new URLSearchParams({
+      candles: symbol,
+      candleSource: source,
+      candleInterval: interval,
+    });
+    const res = await fetch(`/api/prices?${params.toString()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.candles ?? []) as OhlcCandle[];
+  } catch {
+    return [];
+  }
+}
+
+// Latest prices in each asset's native quote currency (USDT/USD/THB).
+export async function fetchNativeQuotes(
+  reqs: Array<{ symbol: string; source: AnalysisSource }>
+): Promise<Record<string, number | null>> {
+  if (!reqs.length) return {};
+  try {
+    const param = reqs.map((r) => `${r.symbol}:${r.source}`).join(",");
+    const res = await fetch(`/api/prices?nativeQuotes=${encodeURIComponent(param)}`);
+    if (!res.ok) return {};
+    const data = await res.json();
+    return (data.nativeQuotes ?? {}) as Record<string, number | null>;
+  } catch {
+    return {};
+  }
+}
+
 // Thai stocks quote via Yahoo Finance's .BK listings (~15-min delayed but
 // live); crypto/foreign stocks/FX all have live sources too, so everything
 // except unrecognized cash currencies gets auto-priced.

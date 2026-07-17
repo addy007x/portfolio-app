@@ -116,6 +116,22 @@ export interface Portfolio {
   targetAmount?: number; // THB, optional goal for this portfolio's total value
 }
 
+// Price alert from the analysis page. Levels are in the asset's NATIVE
+// quote currency (USDT for crypto, USD for foreign stocks, THB for Thai
+// stocks) — same units the analysis levels are computed in.
+export interface PriceAlert {
+  id: string;
+  symbol: string;
+  source: "crypto" | "us" | "th";
+  level: number;
+  direction: "above" | "below"; // above = breakout/resistance, below = breakdown/support
+  label: string; // e.g. "แนวต้าน R1", "Breakout"
+  createdAtMs: number;
+  // Set when the alert fires; used as a cooldown so a price oscillating
+  // around the level doesn't spam notifications.
+  lastFiredMs?: number;
+}
+
 // Yearly DCA plan: how this year's budget is split across assets.
 export interface InvestPlanItem {
   symbol: string;

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { BottomNav } from "@/components/BottomNav";
 import { LivePriceUpdater } from "@/components/LivePriceUpdater";
+import { AlertWatcher } from "@/components/AlertWatcher";
 import { CurrencyProvider } from "@/lib/currencyDisplay";
 import { LanguageProvider, useLanguage } from "@/lib/i18n";
 import { ThemeProvider } from "@/lib/themeContext";
@@ -43,6 +44,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 style={{ background: "var(--bg)", maxWidth: 480 }}
               >
                 <LivePriceUpdater />
+                <AlertWatcher />
                 <div className="flex-1 overflow-y-auto px-4 pt-4" style={{ paddingBottom: 96 }}>
                   {children}
                 </div>
