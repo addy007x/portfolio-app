@@ -302,6 +302,43 @@ const CANDLE_INTERVALS: Record<
   "1w": { binance: "1w", binanceLimit: 260, yahoo: "1wk", yahooRange: "5y", aggregate: 1 },
 };
 
+// USDT has no self-quoted pair on Binance (there's no "USDTUSDT" market —
+// it IS the quote currency), so it fetches from Yahoo's crypto ticker
+// instead, same as stocks. Every other symbol, including other stablecoins
+// like USDC (which does trade against USDT), goes through Binance directly.
+const CRYPTO_VIA_YAHOO = new Set(["USDT"]);
+
+async function fetchCandlesFromYahoo(
+  yahooSymbol: string,
+  cfg: (typeof CANDLE_INTERVALS)[string]
+): Promise<Candle[]> {
+  const data = await fetchJson(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${cfg.yahoo}&range=${cfg.yahooRange}`,
+    { headers: { "User-Agent": "Mozilla/5.0" } }
+  );
+  const result = data?.chart?.result?.[0];
+  const ts: number[] = result?.timestamp ?? [];
+  const q = result?.indicators?.quote?.[0] ?? {};
+  const raw: Candle[] = [];
+  for (let i = 0; i < ts.length; i++) {
+    const candle: Candle = [ts[i] * 1000, q.open?.[i], q.high?.[i], q.low?.[i], q.close?.[i]];
+    if (candle.every((v) => typeof v === "number" && Number.isFinite(v))) raw.push(candle);
+  }
+  if (cfg.aggregate <= 1) return raw;
+  const grouped: Candle[] = [];
+  for (let i = 0; i < raw.length; i += cfg.aggregate) {
+    const group = raw.slice(i, i + cfg.aggregate);
+    grouped.push([
+      group[0][0],
+      group[0][1],
+      Math.max(...group.map((c) => c[2])),
+      Math.min(...group.map((c) => c[3])),
+      group[group.length - 1][4],
+    ]);
+  }
+  return grouped;
+}
+
 async function fetchCandles(
   symbol: string,
   source: "crypto" | "us" | "th",
@@ -314,7 +351,7 @@ async function fetchCandles(
 
   let candles: Candle[] = [];
   try {
-    if (source === "crypto") {
+    if (source === "crypto" && !CRYPTO_VIA_YAHOO.has(symbol)) {
       const data = (await fetchJson(
         `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${cfg.binance}&limit=${cfg.binanceLimit}`
       )) as Array<[number, string, string, string, string, ...unknown[]]>;
@@ -324,34 +361,12 @@ async function fetchCandles(
             [k[0], parseFloat(k[1]), parseFloat(k[2]), parseFloat(k[3]), parseFloat(k[4])] as Candle
         )
         .filter((c) => c.every(Number.isFinite));
+    } else if (source === "crypto") {
+      // USDT/USDC: no Binance self-pair, so quote against USD on Yahoo.
+      candles = await fetchCandlesFromYahoo(`${symbol}-USD`, cfg);
     } else {
       const yahooSymbol = source === "th" ? (symbol.endsWith(".BK") ? symbol : `${symbol}.BK`) : symbol;
-      const data = await fetchJson(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${cfg.yahoo}&range=${cfg.yahooRange}`,
-        { headers: { "User-Agent": "Mozilla/5.0" } }
-      );
-      const result = data?.chart?.result?.[0];
-      const ts: number[] = result?.timestamp ?? [];
-      const q = result?.indicators?.quote?.[0] ?? {};
-      const raw: Candle[] = [];
-      for (let i = 0; i < ts.length; i++) {
-        const candle: Candle = [ts[i] * 1000, q.open?.[i], q.high?.[i], q.low?.[i], q.close?.[i]];
-        if (candle.every((v) => typeof v === "number" && Number.isFinite(v))) raw.push(candle);
-      }
-      if (cfg.aggregate > 1) {
-        for (let i = 0; i < raw.length; i += cfg.aggregate) {
-          const group = raw.slice(i, i + cfg.aggregate);
-          candles.push([
-            group[0][0],
-            group[0][1],
-            Math.max(...group.map((c) => c[2])),
-            Math.min(...group.map((c) => c[3])),
-            group[group.length - 1][4],
-          ]);
-        }
-      } else {
-        candles = raw;
-      }
+      candles = await fetchCandlesFromYahoo(yahooSymbol, cfg);
     }
   } catch {
     return [];
