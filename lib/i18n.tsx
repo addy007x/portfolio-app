@@ -67,8 +67,8 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "analysis.mtfTitle": { th: "วิเคราะห์หลาย Timeframe", en: "Multi-timeframe view" },
   "analysis.alertsTitle": { th: "การแจ้งเตือนราคา (LINE)", en: "Price alerts (LINE)" },
   "analysis.alertNote": {
-    th: "แตะกระดิ่งที่ระดับราคาเพื่อตั้งเตือน · ระบบเช็คราคาทุก 1 นาทีขณะเปิดแอปอยู่ และเตือนซ้ำระดับเดิมได้ทุก 6 ชั่วโมง",
-    en: "Tap a bell next to any level to set an alert · prices are checked every minute while the app is open; the same level re-alerts at most every 6 hours",
+    th: "แตะกระดิ่งที่ระดับราคาเพื่อตั้งเตือน · ระบบเช็คให้ตลอด 24 ชม. แม้ปิดแอปอยู่ (ทุก 5 นาทีผ่านเซิร์ฟเวอร์ + ทุก 1 นาทีขณะเปิดแอป) · เตือนซ้ำระดับเดิมได้ทุก 6 ชั่วโมง",
+    en: "Tap a bell next to any level to set an alert · checked 24/7 even with the app closed (every 5 min server-side + every minute while the app is open) · the same level re-alerts at most every 6 hours",
   },
   "analysis.noAlerts": {
     th: "ยังไม่มีการแจ้งเตือน",
