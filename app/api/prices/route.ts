@@ -364,15 +364,27 @@ async function fetchCandles(
   let candles: Candle[] = [];
   try {
     if (source === "crypto" && !CRYPTO_VIA_YAHOO.has(symbol)) {
-      const data = (await fetchJsonRetrying(
-        `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${cfg.binance}&limit=${cfg.binanceLimit}`
-      )) as Array<[number, string, string, string, string, ...unknown[]]>;
-      candles = data
-        .map(
-          (k) =>
-            [k[0], parseFloat(k[1]), parseFloat(k[2]), parseFloat(k[3]), parseFloat(k[4])] as Candle
-        )
-        .filter((c) => c.every(Number.isFinite));
+      // Binance first (real-time, full interval support)…
+      try {
+        const data = (await fetchJsonRetrying(
+          `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${cfg.binance}&limit=${cfg.binanceLimit}`
+        )) as Array<[number, string, string, string, string, ...unknown[]]>;
+        candles = data
+          .map(
+            (k) =>
+              [k[0], parseFloat(k[1]), parseFloat(k[2]), parseFloat(k[3]), parseFloat(k[4])] as Candle
+          )
+          .filter((c) => c.every(Number.isFinite));
+      } catch {
+        candles = [];
+      }
+      // …but never depend on it alone: Binance rate-bans IPs for stretches
+      // after heavy use and doesn't list every coin (e.g. delisted ones),
+      // and either case used to strand the analysis page on "no data".
+      // Yahoo quotes the majors as SYM-USD, so fall through to it.
+      if (!candles.length) {
+        candles = await fetchCandlesFromYahoo(`${symbol}-USD`, cfg);
+      }
     } else if (source === "crypto") {
       // USDT: no Binance self-pair, so quote against USD on Yahoo.
       candles = await fetchCandlesFromYahoo(`${symbol}-USD`, cfg);
@@ -383,6 +395,10 @@ async function fetchCandles(
   } catch {
     return [];
   }
+  // Keep payloads/chart work bounded — Yahoo's 24/7 crypto tickers can
+  // return thousands of intraday bars over the ranges we request, far more
+  // than the ~300 the Binance path caps at.
+  if (candles.length > 365) candles = candles.slice(-365);
   if (candles.length) candlesCache.set(cacheKey, candles, TTL.candles);
   return candles;
 }
@@ -391,12 +407,22 @@ async function fetchCandles(
 // analysis page and price alerts work in native prices, unlike the rest of
 // the app which converts everything to THB.
 async function fetchNativeQuote(symbol: string, source: "crypto" | "us" | "th"): Promise<number | null> {
+  if (source === "crypto" && symbol === "USDT") return 1;
   if (source === "crypto") {
-    if (symbol === "USDT") return 1;
     const map = await getBinanceUsdtPrices();
-    return map.get(symbol) ?? null;
+    const fromBinance = map.get(symbol);
+    if (fromBinance !== undefined) return fromBinance;
+    // Same Binance-down/unlisted fallback as the candle fetcher, so price
+    // alerts keep evaluating even during a Binance outage.
   }
-  const yahooSymbol = source === "th" ? (symbol.endsWith(".BK") ? symbol : `${symbol}.BK`) : symbol;
+  const yahooSymbol =
+    source === "crypto"
+      ? `${symbol}-USD`
+      : source === "th"
+        ? symbol.endsWith(".BK")
+          ? symbol
+          : `${symbol}.BK`
+        : symbol;
   const cacheKey = `native:${source}:${symbol}`;
   const cached = stockPriceCache.get(cacheKey);
   if (cached !== undefined) return cached;
