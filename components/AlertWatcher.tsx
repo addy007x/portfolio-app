@@ -75,7 +75,12 @@ export function AlertWatcher() {
                 userId: profile.lineUserId,
                 message,
               }),
-            }).catch(() => {});
+            })
+              .then(async (res) => {
+                const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+                if (!data?.ok) console.error("LINE push failed", data?.error);
+              })
+              .catch((err) => console.error("LINE push request failed", err));
           }
         }
       } finally {

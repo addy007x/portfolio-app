@@ -201,3 +201,193 @@ export function downloadReport(html: string, filename: string) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+
+// Renders the report HTML and saves it as an actual .pdf file (no browser
+// print dialog). html2pdf.js wraps html2canvas + jsPDF.
+//
+// html2canvas snapshots real on-screen layout, so the render target must sit
+// at normal (non-negative) coordinates with full opacity — an offscreen
+// `left:-10000px` trick produces a blank capture. Instead we show the report
+// in a fixed full-screen overlay (on top of everything, positive coords)
+// while it's captured, then remove it once the PDF is saved.
+export async function downloadReportPdf(html: string, filename: string) {
+  const html2pdf = (await import("html2pdf.js")).default;
+
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const sheet = doc.querySelector(".sheet");
+  if (!sheet) throw new Error("Report HTML missing .sheet root");
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText =
+    "position:fixed;inset:0;z-index:99999;background:#f4f6f5;overflow:auto;padding:20px 0;";
+  const container = document.createElement("div");
+  container.style.cssText = "width:860px;max-width:100%;margin:0 auto;background:#f4f6f5;";
+  const styleEl = doc.querySelector("style");
+  if (styleEl) container.appendChild(styleEl.cloneNode(true));
+  container.appendChild(sheet.cloneNode(true));
+  overlay.appendChild(container);
+  document.body.appendChild(overlay);
+
+  // Wait for layout/paint so html2canvas doesn't snapshot before styles apply.
+  // (A double-rAF wait was tried first but resolved before the browser
+  // actually painted, producing a zero-height capture; a fixed delay is
+  // reliable here.)
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  try {
+    await html2pdf()
+      .set({
+        margin: 0,
+        filename,
+        image: { type: "jpeg", quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: "#f4f6f5" },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      })
+      .from(container)
+      .save();
+  } finally {
+    overlay.remove();
+  }
+}
+
+// Sheet names in Excel can't contain \ / ? * [ ] : and are capped at 31 chars.
+function sheetName(title: string, fallback: string): string {
+  const cleaned = title.replace(/[\\/?*[\]:]/g, "").trim();
+  return (cleaned || fallback).slice(0, 31);
+}
+
+function argb(hex: string): string {
+  return `FF${hex.replace("#", "").toUpperCase()}`;
+}
+
+const XL_ACCENT = argb(ACCENT);
+const XL_ACCENT_TINT = "FFE6F5EF"; // light accent tint for sub-headers
+const XL_ZEBRA = argb("#f8faf9");
+const XL_BORDER = argb("#e6ebe8");
+const XL_INK = argb(INK);
+const XL_MUTED = argb(MUTED);
+const XL_WHITE = argb(SURFACE);
+
+const thinBorder = {
+  top: { style: "thin" as const, color: { argb: XL_BORDER } },
+  left: { style: "thin" as const, color: { argb: XL_BORDER } },
+  bottom: { style: "thin" as const, color: { argb: XL_BORDER } },
+  right: { style: "thin" as const, color: { argb: XL_BORDER } },
+};
+
+export async function downloadReportExcel(doc: ReportDoc, filename: string) {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = doc.title;
+  wb.created = new Date();
+
+  const summary = wb.addWorksheet(sheetName(doc.title, "Summary"));
+  summary.mergeCells("A1:C1");
+  const titleRow = summary.getRow(1);
+  titleRow.getCell(1).value = doc.title;
+  titleRow.height = 26;
+  titleRow.eachCell((cell) => {
+    cell.font = { bold: true, size: 15, color: { argb: XL_WHITE } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XL_ACCENT } };
+    cell.alignment = { vertical: "middle" };
+  });
+
+  const metaRow = summary.addRow([doc.portfolioName, doc.periodLabel]);
+  metaRow.font = { italic: true, color: { argb: XL_MUTED } };
+  const genRow = summary.addRow([doc.generatedLabel]);
+  genRow.font = { italic: true, size: 10, color: { argb: XL_MUTED } };
+  summary.addRow([]);
+
+  const kpiHeader = summary.addRow(["KPI", "Value"]);
+  kpiHeader.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: XL_INK } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XL_ACCENT_TINT } };
+    cell.border = thinBorder;
+  });
+  doc.kpis.forEach((k) => {
+    const row = summary.addRow([k.label, k.sub ? `${k.value} ${k.sub}` : k.value]);
+    row.getCell(1).font = { color: { argb: XL_MUTED } };
+    row.getCell(2).font = {
+      bold: true,
+      color: { argb: k.color ? argb(k.color) : XL_INK },
+    };
+    row.eachCell((cell) => (cell.border = thinBorder));
+  });
+
+  if (doc.allocation.length) {
+    summary.addRow([]);
+    const allocTitleRow = summary.addRow([doc.allocationTitle]);
+    allocTitleRow.font = { bold: true, color: { argb: XL_INK } };
+    const allocHeader = summary.addRow(["สินทรัพย์", "%", "มูลค่า"]);
+    allocHeader.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: XL_INK } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XL_ACCENT_TINT } };
+      cell.border = thinBorder;
+    });
+    doc.allocation.forEach((a) => {
+      const row = summary.addRow([`  ${a.name}`, `${a.pct.toFixed(1)}%`, a.valueText]);
+      row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: argb(a.color) } };
+      row.getCell(1).font = { color: { argb: XL_WHITE }, bold: true };
+      row.getCell(2).alignment = { horizontal: "right" };
+      row.getCell(3).alignment = { horizontal: "right" };
+      row.eachCell((cell) => (cell.border = thinBorder));
+    });
+  }
+  summary.getColumn(1).width = 28;
+  summary.getColumn(2).width = 18;
+  summary.getColumn(3).width = 18;
+  summary.views = [{ state: "frozen", ySplit: 1 }];
+
+  doc.tables.forEach((tb, i) => {
+    const ws = wb.addWorksheet(sheetName(tb.title, `Table ${i + 1}`));
+    const right = new Set(tb.alignRight ?? []);
+
+    const headerRow = ws.addRow(tb.headers);
+    headerRow.height = 20;
+    headerRow.eachCell((cell, colNum) => {
+      cell.font = { bold: true, color: { argb: XL_WHITE } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XL_ACCENT } };
+      cell.alignment = { horizontal: right.has(colNum - 1) ? "right" : "left", vertical: "middle" };
+      cell.border = thinBorder;
+    });
+
+    if (!tb.rows.length) {
+      const emptyRow = ws.addRow([tb.emptyText]);
+      ws.mergeCells(emptyRow.number, 1, emptyRow.number, tb.headers.length);
+      emptyRow.getCell(1).font = { italic: true, color: { argb: XL_MUTED } };
+      emptyRow.getCell(1).alignment = { horizontal: "center" };
+    } else {
+      tb.rows.forEach((rowData, r) => {
+        const row = ws.addRow(rowData);
+        row.eachCell((cell, colNum) => {
+          const idx = colNum - 1;
+          cell.border = thinBorder;
+          cell.alignment = { horizontal: right.has(idx) ? "right" : "left" };
+          if (r % 2 === 1) {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XL_ZEBRA } };
+          }
+          const color = tb.colors?.[r]?.[idx];
+          if (color) cell.font = { bold: true, color: { argb: argb(color) } };
+        });
+      });
+    }
+
+    ws.columns.forEach((col, idx) => {
+      col.width = idx === 0 ? 16 : 14;
+    });
+    ws.views = [{ state: "frozen", ySplit: 1 }];
+  });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}

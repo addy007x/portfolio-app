@@ -113,6 +113,10 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "report.none": { th: "ไม่มีรายการในช่วงนี้", en: "Nothing in this period" },
   "report.contents": { th: "รายงานจะประกอบด้วย", en: "This report includes" },
   "report.items": { th: "รายการ", en: "items" },
+  "report.exportPdf": { th: "ดาวน์โหลด PDF", en: "Download PDF" },
+  "report.exportingPdf": { th: "กำลังสร้าง PDF...", en: "Generating PDF..." },
+  "report.exportExcel": { th: "ดาวน์โหลด Excel", en: "Download Excel" },
+  "report.exportingExcel": { th: "กำลังสร้าง Excel...", en: "Generating Excel..." },
   "report.exportOpen": { th: "เปิดรายงาน / พิมพ์เป็น PDF", en: "Open report / print to PDF" },
   "report.exportDownload": { th: "ดาวน์โหลดไฟล์รายงาน (HTML)", en: "Download report file (HTML)" },
   "report.exportHint": {
@@ -428,6 +432,19 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "settings.lineUserId": { th: "LINE User ID (ขึ้นต้นด้วย U)", en: "LINE User ID (starts with U)" },
   "settings.lineSave": { th: "บันทึกการตั้งค่า LINE", en: "Save LINE settings" },
   "settings.lineSaved": { th: "บันทึกแล้ว ✓", en: "Saved ✓" },
+  "settings.lineTest": { th: "ทดสอบส่งข้อความ", en: "Send test message" },
+  "settings.lineTesting": { th: "กำลังส่ง...", en: "Sending..." },
+  "settings.lineTestMissing": {
+    th: "กรอก Token และ User ID ก่อนทดสอบ",
+    en: "Enter Token and User ID before testing",
+  },
+  "settings.lineTestMessage": {
+    th: "🔔 ทดสอบระบบแจ้งเตือน — ถ้าคุณเห็นข้อความนี้ แสดงว่าตั้งค่าถูกต้อง",
+    en: "🔔 Notification test — if you see this, the setup is correct",
+  },
+  "settings.lineTestOk": { th: "ส่งสำเร็จ ✓ เช็คแอป LINE ของคุณ", en: "Sent ✓ Check your LINE app" },
+  "settings.lineTestFail": { th: "ส่งไม่สำเร็จ", en: "Failed to send" },
+  "settings.lineTestNetworkError": { th: "เชื่อมต่อไม่สำเร็จ", en: "Network error" },
 };
 
 interface LanguageContextValue {

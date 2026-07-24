@@ -27,6 +27,8 @@ import {
   buildReportHtml,
   openReportInNewTab,
   downloadReport,
+  downloadReportPdf,
+  downloadReportExcel,
   type ReportDoc,
   type ReportTable,
 } from "@/lib/reportExport";
@@ -61,6 +63,8 @@ export default function ReportsPage() {
   const [earnPositions, setEarnPositions] = useState<EarnPosition[]>([]);
   const [earnPriceMap, setEarnPriceMap] = useState<Record<string, number>>({});
   const [period, setPeriod] = useState<Period>("year");
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -271,6 +275,32 @@ export default function ReportsPage() {
   ]);
 
   const filename = `portfolio-report-${period}-${todayIso}.html`;
+  const pdfFilename = `portfolio-report-${period}-${todayIso}.pdf`;
+  const excelFilename = `portfolio-report-${period}-${todayIso}.xlsx`;
+
+  const handleExportPdf = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      await downloadReportPdf(buildReportHtml(doc), pdfFilename);
+    } catch (err) {
+      console.error("PDF export failed", err);
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    if (exportingExcel) return;
+    setExportingExcel(true);
+    try {
+      await downloadReportExcel(doc, excelFilename);
+    } catch (err) {
+      console.error("Excel export failed", err);
+    } finally {
+      setExportingExcel(false);
+    }
+  };
 
   return (
     <div style={{ animation: "scin 0.3s ease both" }}>
@@ -361,9 +391,27 @@ export default function ReportsPage() {
 
       {/* Export actions */}
       <button
-        onClick={() => openReportInNewTab(buildReportHtml(doc))}
+        onClick={handleExportPdf}
+        disabled={exportingPdf}
         className="w-full rounded-[14px] py-3.5 font-bold text-center mt-3 flex items-center justify-center gap-2"
-        style={{ background: "var(--accent)", color: "#04120c" }}
+        style={{ background: "var(--accent)", color: "#04120c", opacity: exportingPdf ? 0.7 : 1 }}
+      >
+        <Icon name={exportingPdf ? "hourglass_top" : "picture_as_pdf"} style={{ fontSize: 19 }} />
+        {exportingPdf ? t("report.exportingPdf") : t("report.exportPdf")}
+      </button>
+      <button
+        onClick={handleExportExcel}
+        disabled={exportingExcel}
+        className="w-full rounded-[14px] py-3.5 font-bold text-center mt-2 flex items-center justify-center gap-2"
+        style={{ background: "var(--surface2)", color: "var(--accent)", opacity: exportingExcel ? 0.7 : 1 }}
+      >
+        <Icon name={exportingExcel ? "hourglass_top" : "table_view"} style={{ fontSize: 19 }} />
+        {exportingExcel ? t("report.exportingExcel") : t("report.exportExcel")}
+      </button>
+      <button
+        onClick={() => openReportInNewTab(buildReportHtml(doc))}
+        className="w-full rounded-[14px] py-3.5 font-bold text-center mt-2 flex items-center justify-center gap-2"
+        style={{ background: "var(--surface2)", color: "var(--accent)" }}
       >
         <Icon name="print" style={{ fontSize: 19 }} />
         {t("report.exportOpen")}

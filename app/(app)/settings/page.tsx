@@ -20,6 +20,10 @@ export default function SettingsPage() {
   const [lineToken, setLineToken] = useState("");
   const [lineUserId, setLineUserId] = useState("");
   const [lineSaved, setLineSaved] = useState(false);
+  const [lineTesting, setLineTesting] = useState(false);
+  const [lineTestResult, setLineTestResult] = useState<{ ok: boolean; detail: string } | null>(
+    null
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -42,6 +46,35 @@ export default function SettingsPage() {
     });
     setLineSaved(true);
     setTimeout(() => setLineSaved(false), 2000);
+  }
+
+  async function handleTestLine() {
+    if (lineTesting) return;
+    setLineTestResult(null);
+    const token = lineToken.trim();
+    const userId = lineUserId.trim();
+    if (!token || !userId) {
+      setLineTestResult({ ok: false, detail: t("settings.lineTestMissing") });
+      return;
+    }
+    setLineTesting(true);
+    try {
+      const res = await fetch("/api/line-push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, userId, message: t("settings.lineTestMessage") }),
+      });
+      const data = (await res.json()) as { ok: boolean; error?: string };
+      setLineTestResult(
+        data.ok
+          ? { ok: true, detail: t("settings.lineTestOk") }
+          : { ok: false, detail: data.error ?? t("settings.lineTestFail") }
+      );
+    } catch {
+      setLineTestResult({ ok: false, detail: t("settings.lineTestNetworkError") });
+    } finally {
+      setLineTesting(false);
+    }
   }
 
   return (
@@ -156,13 +189,38 @@ export default function SettingsPage() {
             value={lineUserId}
             onChange={(e) => setLineUserId(e.target.value)}
           />
-          <button
-            onClick={handleSaveLine}
-            className="rounded-[12px] py-2.5 text-sm font-bold"
-            style={{ background: "var(--accent)", color: "#04120c" }}
-          >
-            {lineSaved ? t("settings.lineSaved") : t("settings.lineSave")}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveLine}
+              className="flex-1 rounded-[12px] py-2.5 text-sm font-bold"
+              style={{ background: "var(--accent)", color: "#04120c" }}
+            >
+              {lineSaved ? t("settings.lineSaved") : t("settings.lineSave")}
+            </button>
+            <button
+              onClick={handleTestLine}
+              disabled={lineTesting}
+              className="flex-1 rounded-[12px] py-2.5 text-sm font-bold"
+              style={{
+                background: "var(--surface2)",
+                color: "var(--accent)",
+                opacity: lineTesting ? 0.7 : 1,
+              }}
+            >
+              {lineTesting ? t("settings.lineTesting") : t("settings.lineTest")}
+            </button>
+          </div>
+          {lineTestResult && (
+            <div
+              className="text-[11.5px] rounded-[10px] px-3 py-2"
+              style={{
+                background: lineTestResult.ok ? "var(--accent-soft)" : "rgba(224,57,62,0.12)",
+                color: lineTestResult.ok ? "var(--accent)" : "var(--down)",
+              }}
+            >
+              {lineTestResult.detail}
+            </div>
+          )}
         </div>
       </Card>
 
