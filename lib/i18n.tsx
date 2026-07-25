@@ -445,6 +445,65 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "settings.lineTestOk": { th: "ส่งสำเร็จ ✓ เช็คแอป LINE ของคุณ", en: "Sent ✓ Check your LINE app" },
   "settings.lineTestFail": { th: "ส่งไม่สำเร็จ", en: "Failed to send" },
   "settings.lineTestNetworkError": { th: "เชื่อมต่อไม่สำเร็จ", en: "Network error" },
+  "settings.webullTitle": { th: "นำเข้ารายการเทรดจาก Webull", en: "Import trades from Webull" },
+  "settings.webullHelp": {
+    th: "ดึงคำสั่งที่จับคู่แล้วจากบัญชี Webull มาเป็นรายการซื้อขาย (เฉพาะหุ้นอเมริกา — Webull ไม่มี API หุ้นไทย) รายการที่นำเข้าแล้วจะไม่ซ้ำ",
+    en: "Pulls filled orders from your Webull account into transactions (US stocks only — Webull has no Thai market API). Already-imported orders are skipped.",
+  },
+  "settings.webullUidLabel": {
+    th: "Firebase UID ของคุณ (ใส่เป็น WEBULL_OWNER_UID ใน .env.local) — แตะเพื่อคัดลอก",
+    en: "Your Firebase UID (set as WEBULL_OWNER_UID in .env.local) — tap to copy",
+  },
+  "settings.webullFrom": { th: "ตั้งแต่วันที่", en: "From date" },
+  "settings.webullTo": { th: "ถึงวันที่", en: "To date" },
+  "settings.webullImport": { th: "นำเข้ารายการเทรด", en: "Import trades" },
+  "settings.webullImporting": { th: "กำลังนำเข้า...", en: "Importing..." },
+  "settings.webullBadRange": {
+    th: "วันเริ่มต้นต้องไม่เกินวันสิ้นสุด",
+    en: "Start date must not be after the end date",
+  },
+  "settings.webullImported": {
+    th: "นำเข้าสำเร็จ {added} รายการ (ข้ามที่ซ้ำ {skipped} รายการ)",
+    en: "Imported {added} trades ({skipped} already existed)",
+  },
+  "settings.webullNothingNew": {
+    th: "ไม่มีรายการใหม่ — พบ {found} รายการ แต่นำเข้าครบแล้ว",
+    en: "Nothing new — found {found} orders, all already imported",
+  },
+  "settings.webullErr.webull_not_configured": {
+    th: "ยังไม่ได้ตั้งค่า WEBULL_APP_KEY / WEBULL_APP_SECRET ใน .env.local",
+    en: "WEBULL_APP_KEY / WEBULL_APP_SECRET are not set in .env.local",
+  },
+  "settings.webullErr.owner_not_configured": {
+    th: "ยังไม่ได้ตั้งค่า WEBULL_OWNER_UID ใน .env.local",
+    en: "WEBULL_OWNER_UID is not set in .env.local",
+  },
+  "settings.webullErr.forbidden": {
+    th: "บัญชีนี้ไม่ใช่เจ้าของ Webull ที่ตั้งค่าไว้",
+    en: "This account is not the configured Webull owner",
+  },
+  "settings.webullErr.invalid_token": {
+    th: "ยืนยันตัวตนไม่สำเร็จ ลองเข้าสู่ระบบใหม่",
+    en: "Authentication failed — try signing in again",
+  },
+  "settings.webullErr.webull_forbidden": {
+    th: "Webull ปฏิเสธคำขอ (อาจยังไม่ได้สมัคร market data)",
+    en: "Webull rejected the request (market data subscription may be missing)",
+  },
+  "settings.webullErr.webull_request_failed": {
+    th: "เรียก Webull ไม่สำเร็จ",
+    en: "Webull request failed",
+  },
+  "settings.webullErr.no_accounts": {
+    th: "ไม่พบบัญชีใน Webull",
+    en: "No Webull accounts found",
+  },
+  "settings.webullErr.invalid_date_range": {
+    th: "ช่วงวันที่ไม่ถูกต้อง",
+    en: "Invalid date range",
+  },
+  "settings.webullErr.network": { th: "เชื่อมต่อไม่สำเร็จ", en: "Network error" },
+  "settings.webullErr.undefined": { th: "เกิดข้อผิดพลาด", en: "Something went wrong" },
 };
 
 interface LanguageContextValue {

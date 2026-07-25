@@ -5,9 +5,11 @@ import {
   updateDoc,
   deleteDoc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   orderBy,
+  where,
   serverTimestamp,
   setDoc,
   type Unsubscribe,
@@ -98,6 +100,23 @@ export async function updateTransaction(
 
 export async function deleteTransaction(uid: string, id: string) {
   await deleteDoc(doc(db, "users", uid, "transactions", id));
+}
+
+// Broker order ids already imported, so a re-import over an overlapping date
+// range skips them instead of creating duplicate transactions.
+export async function getImportedOrderIds(
+  uid: string,
+  source: "webull"
+): Promise<Set<string>> {
+  const snap = await getDocs(
+    query(userCollection(uid, "transactions"), where("source", "==", source))
+  );
+  const ids = new Set<string>();
+  snap.forEach((d) => {
+    const externalId = (d.data() as Transaction).externalId;
+    if (externalId) ids.add(externalId);
+  });
+  return ids;
 }
 
 // ---- Dividends ----

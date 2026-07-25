@@ -91,6 +91,13 @@ export interface Transaction {
   totalValue: number;
   notes?: string;
   portfolioId?: string;
+  // Set on rows imported from a broker rather than typed in by hand, so a
+  // re-import can tell its own rows apart from the user's.
+  source?: "webull";
+  // The broker's own order id. Used to skip orders already imported, so
+  // running the import twice over overlapping date ranges doesn't duplicate
+  // transactions (which would silently corrupt cost basis).
+  externalId?: string;
   createdAt?: unknown;
 }
 

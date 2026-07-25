@@ -3,12 +3,22 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { getUserProfile, updateUserProfile } from "@/lib/firestore";
+import {
+  addTransaction,
+  getImportedOrderIds,
+  getUserProfile,
+  updateUserProfile,
+} from "@/lib/firestore";
+import { fetchFxRateToThb } from "@/lib/priceFeed";
+import { usePortfolios } from "@/lib/portfolioContext";
 import { Card, Icon } from "@/components/Card";
 import { FormInput } from "@/components/Modal";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 import { useLanguage, type Language } from "@/lib/i18n";
 import { useTheme, type ThemePreference } from "@/lib/themeContext";
+
+const todayIso = new Date().toISOString().slice(0, 10);
+const oneYearAgoIso = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString().slice(0, 10);
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
@@ -24,6 +34,12 @@ export default function SettingsPage() {
   const [lineTestResult, setLineTestResult] = useState<{ ok: boolean; detail: string } | null>(
     null
   );
+  const { currentPortfolioId } = usePortfolios();
+  const [uidCopied, setUidCopied] = useState(false);
+  const [importFrom, setImportFrom] = useState(oneYearAgoIso);
+  const [importTo, setImportTo] = useState(todayIso);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ ok: boolean; detail: string } | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -74,6 +90,93 @@ export default function SettingsPage() {
       setLineTestResult({ ok: false, detail: t("settings.lineTestNetworkError") });
     } finally {
       setLineTesting(false);
+    }
+  }
+
+  // Pulls filled orders from the owner's Webull account and turns the ones
+  // not already imported into transactions. Webull has no Thai market, so
+  // everything here is USD-quoted (see lib/webull.ts).
+  async function handleImportWebull() {
+    if (!user || importing) return;
+    setImportResult(null);
+    if (importFrom > importTo) {
+      setImportResult({ ok: false, detail: t("settings.webullBadRange") });
+      return;
+    }
+    setImporting(true);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/webull/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken, startDate: importFrom, endDate: importTo }),
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        orders?: Array<{
+          orderId: string;
+          symbol: string;
+          side: "buy" | "sell";
+          quantity: number;
+          price: number;
+          filledAt: string;
+        }>;
+      };
+
+      if (!data.ok) {
+        // Unknown codes must not leak a raw dictionary key into the UI —
+        // t() returns the key verbatim when it has no entry.
+        const key = `settings.webullErr.${data.error ?? "undefined"}`;
+        const detail = t(key);
+        setImportResult({ ok: false, detail: detail === key ? t("settings.webullErr.undefined") : detail });
+        return;
+      }
+
+      const orders = data.orders ?? [];
+      const alreadyImported = await getImportedOrderIds(user.uid, "webull");
+      const fresh = orders.filter((o) => !alreadyImported.has(o.orderId));
+
+      if (!fresh.length) {
+        setImportResult({
+          ok: true,
+          detail: t("settings.webullNothingNew", { found: orders.length }),
+        });
+        return;
+      }
+
+      // Webull prices are USD. The app stores THB as the primary figure with
+      // priceUsd frozen alongside. Ideally each order would convert at the
+      // rate on its own fill date; only today's rate is available here, so
+      // the THB figure is an approximation while priceUsd stays exact.
+      const fxRate = await fetchFxRateToThb("USD");
+
+      for (const order of fresh) {
+        await addTransaction(user.uid, {
+          date: order.filledAt,
+          type: order.side,
+          symbol: order.symbol,
+          quantity: order.quantity,
+          price: order.price * fxRate,
+          priceUsd: order.price,
+          totalValue: order.price * fxRate * order.quantity,
+          source: "webull",
+          externalId: order.orderId,
+          ...(currentPortfolioId ? { portfolioId: currentPortfolioId } : {}),
+        });
+      }
+
+      setImportResult({
+        ok: true,
+        detail: t("settings.webullImported", {
+          added: fresh.length,
+          skipped: orders.length - fresh.length,
+        }),
+      });
+    } catch {
+      setImportResult({ ok: false, detail: t("settings.webullErr.network") });
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -222,6 +325,90 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+      </Card>
+
+      <Card className="mt-3">
+        <div className="flex items-center gap-2 mb-1">
+          <Icon name="sync_alt" style={{ fontSize: 20, color: "var(--muted)" }} />
+          <span className="text-sm font-bold">{t("settings.webullTitle")}</span>
+        </div>
+        <div className="text-[11px] mb-3" style={{ color: "var(--muted)" }}>
+          {t("settings.webullHelp")}
+        </div>
+
+        {/* The server only serves this data to the uid in WEBULL_OWNER_UID,
+            so the value has to be readable somewhere to configure it. */}
+        <div className="mb-3">
+          <div className="text-[11px] mb-1" style={{ color: "var(--muted)" }}>
+            {t("settings.webullUidLabel")}
+          </div>
+          <button
+            onClick={() => {
+              if (!user) return;
+              navigator.clipboard?.writeText(user.uid);
+              setUidCopied(true);
+              setTimeout(() => setUidCopied(false), 2000);
+            }}
+            className="w-full flex items-center gap-2 rounded-[10px] px-3 py-2 text-left"
+            style={{ background: "var(--surface2)" }}
+          >
+            <span
+              className="flex-1 text-[11px] font-mono break-all"
+              style={{ color: "var(--muted)" }}
+            >
+              {user?.uid ?? "—"}
+            </span>
+            <Icon
+              name={uidCopied ? "check" : "content_copy"}
+              style={{ fontSize: 16, color: "var(--accent)" }}
+            />
+          </button>
+        </div>
+
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <FormInput
+              label={t("settings.webullFrom")}
+              type="date"
+              value={importFrom}
+              onChange={(e) => setImportFrom(e.target.value)}
+            />
+          </div>
+          <div className="flex-1">
+            <FormInput
+              label={t("settings.webullTo")}
+              type="date"
+              value={importTo}
+              onChange={(e) => setImportTo(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={handleImportWebull}
+          disabled={importing}
+          className="w-full mt-3 rounded-[12px] py-2.5 text-sm font-bold flex items-center justify-center gap-2"
+          style={{
+            background: "var(--accent)",
+            color: "#04120c",
+            opacity: importing ? 0.7 : 1,
+          }}
+        >
+          <Icon name={importing ? "hourglass_top" : "download"} style={{ fontSize: 17 }} />
+          {importing ? t("settings.webullImporting") : t("settings.webullImport")}
+        </button>
+
+        {importResult && (
+          <div
+            className="text-[11.5px] rounded-[10px] px-3 py-2 mt-3"
+            style={{
+              background: importResult.ok ? "var(--accent-soft)" : "rgba(224,57,62,0.12)",
+              color: importResult.ok ? "var(--accent)" : "var(--down)",
+            }}
+          >
+            {importResult.detail}
+          </div>
+        )}
       </Card>
 
       <button

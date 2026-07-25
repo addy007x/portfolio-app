@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { fetchWebullUsPrices, webullConfigured } from "@/lib/webull";
 
 // Fast-path for common tickers, so they resolve without a network round trip.
 // Anything not listed here falls through to resolveCryptoId(), which uses
@@ -581,17 +582,32 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ---- Foreign stocks/ETFs via Yahoo Finance (USD quotes -> THB) ----
+  // ---- Foreign stocks/ETFs (USD quotes -> THB) ----
+  // Webull first when credentials are configured: it's the user's own broker
+  // feed and answers for every symbol in one round trip. Yahoo stays as the
+  // fallback, per symbol, so a missing entitlement or an unlisted ticker
+  // degrades to the old behaviour instead of blanking the holding.
   if (stockSymbols.length) {
+    const uncached: string[] = [];
+    for (const sym of stockSymbols) {
+      const cached = stockPriceCache.get(`us:${sym}`);
+      if (cached !== undefined) stocks[sym] = cached;
+      else uncached.push(sym);
+    }
+
+    let fromWebull: Record<string, number> = {};
+    if (uncached.length && webullConfigured()) {
+      try {
+        fromWebull = await fetchWebullUsPrices(uncached);
+      } catch (err) {
+        console.error("Webull US quotes failed, falling back to Yahoo", err);
+      }
+    }
+
     await Promise.all(
-      stockSymbols.map(async (sym) => {
-        const cached = stockPriceCache.get(`us:${sym}`);
-        if (cached !== undefined) {
-          stocks[sym] = cached;
-          return;
-        }
-        const usdPrice = await fetchYahooPrice(sym);
-        const thb = usdPrice !== null && Number.isFinite(usdRate) ? usdPrice * usdRate : null;
+      uncached.map(async (sym) => {
+        const usdPrice = fromWebull[sym] ?? (await fetchYahooPrice(sym));
+        const thb = usdPrice != null && Number.isFinite(usdRate) ? usdPrice * usdRate : null;
         stocks[sym] = thb;
         stockPriceCache.set(`us:${sym}`, thb, TTL.stockPrice);
       })
