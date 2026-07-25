@@ -59,6 +59,13 @@ export interface Holding {
   // Absent on holdings created before multi-portfolio support; treated as
   // belonging to the account's defaultPortfolioId (see lib/portfolioContext).
   portfolioId?: string;
+  // Set on holdings mirrored from a connected broker. These are owned by the
+  // sync: it overwrites their quantity/cost on every run and removes them
+  // once the broker reports the position closed. It also means the
+  // transaction-driven recompute must leave them alone — the broker's
+  // position is authoritative, while the app's transaction history may only
+  // cover the window that was imported.
+  source?: "webull";
   updatedAt?: unknown;
 }
 

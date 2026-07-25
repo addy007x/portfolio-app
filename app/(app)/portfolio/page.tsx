@@ -10,8 +10,11 @@ import {
   computePortfolioSummary,
   belongsToPortfolio,
   findSymbolPortfolioConflict,
+  syncBrokerHoldings,
   UNASSIGNED_PORTFOLIO_ID,
+  type HoldingSyncResult,
 } from "@/lib/firestore";
+import { fetchFxRateToThb } from "@/lib/priceFeed";
 import type { Holding, AssetClass } from "@/lib/types";
 import { ASSET_CLASS_COLOR, assetClassLabel } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
@@ -44,11 +47,23 @@ export default function PortfolioPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncNotice, setSyncNotice] = useState<HoldingSyncResult | null>(null);
+  const [holdingsLoaded, setHoldingsLoaded] = useState(false);
 
   useEffect(() => {
     if (!user) return;
-    return watchHoldings(user.uid, setAllHoldings);
+    return watchHoldings(user.uid, (items) => {
+      setAllHoldings(items);
+      setHoldingsLoaded(true);
+    });
   }, [user]);
+
+  // Read inside the broker-sync effect without making it a dependency —
+  // the sync writes holdings, so depending on them would loop.
+  const allHoldingsRef = useRef<Holding[]>([]);
+  useEffect(() => {
+    allHoldingsRef.current = allHoldings;
+  }, [allHoldings]);
 
   // One-time backfill: holdings from before avgCostUsd existed get it
   // pinned in Firestore from the current session's frozen rate. After this
@@ -65,6 +80,62 @@ export default function PortfolioPage() {
       }
     }
   }, [user, allHoldings, frozenUsdRate]);
+
+  // Mirror the connected broker's positions into holdings on open, so the
+  // portfolio reflects the real account without a manual step. Runs once per
+  // mount rather than on every holdings change, since it writes to the same
+  // collection watchHoldings subscribes to and would otherwise re-trigger
+  // itself. Users without Webull configured get the untouched manual
+  // behaviour: the route replies webull_not_configured and this exits.
+  const syncedRef = useRef(false);
+  useEffect(() => {
+    // Wait for the first holdings snapshot: syncing against a still-empty
+    // list would treat every existing holding as missing and create a
+    // duplicate for each broker position instead of adopting them.
+    if (!user || !holdingsLoaded || syncedRef.current) return;
+    syncedRef.current = true;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const idToken = await user.getIdToken();
+        const res = await fetch("/api/webull/positions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken }),
+        });
+        const data = (await res.json()) as {
+          ok: boolean;
+          positions?: Array<{ symbol: string; quantity: number; costPrice: number; lastPrice: number }>;
+          error?: string;
+        };
+        // Only a confirmed-good response may drive the sync: syncBrokerHoldings
+        // deletes mirrored holdings missing from the list, so treating a
+        // failure as "no positions" would wipe them out.
+        if (cancelled || !data.ok || !data.positions) return;
+
+        const usdRate = await fetchFxRateToThb("USD");
+        if (cancelled || !(usdRate > 1.5)) return; // 1 is the failure fallback
+
+        const result = await syncBrokerHoldings(
+          user.uid,
+          data.positions,
+          allHoldingsRef.current,
+          usdRate,
+          currentPortfolioId
+        );
+        if (!cancelled && (result.added || result.updated || result.removed)) {
+          setSyncNotice(result);
+        }
+      } catch {
+        // Offline or route unavailable — keep the existing holdings as-is.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, currentPortfolioId, holdingsLoaded]);
 
   const holdings = allHoldings.filter((h) =>
     belongsToPortfolio(h, currentPortfolioId, defaultPortfolioId)
@@ -145,6 +216,23 @@ export default function PortfolioPage() {
           <Icon name="add" style={{ fontSize: 22, color: "#04120c" }} />
         </button>
       </div>
+
+      {syncNotice && (
+        <button
+          onClick={() => setSyncNotice(null)}
+          className="w-full flex items-center gap-2 rounded-[12px] px-3 py-2 mb-3 text-left"
+          style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+        >
+          <Icon name="cloud_done" style={{ fontSize: 17 }} />
+          <span className="flex-1 text-[11.5px]">
+            {t("portfolio.brokerSynced", {
+              updated: syncNotice.updated + syncNotice.added,
+              removed: syncNotice.removed,
+            })}
+          </span>
+          <Icon name="close" style={{ fontSize: 15 }} />
+        </button>
+      )}
 
       <Card>
         <div className="text-[13px]" style={{ color: "var(--muted)" }}>

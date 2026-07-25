@@ -72,6 +72,90 @@ export async function deleteHolding(uid: string, id: string) {
   await deleteDoc(doc(db, "users", uid, "holdings", id));
 }
 
+export interface BrokerPosition {
+  symbol: string;
+  quantity: number;
+  costPrice: number; // USD per share
+  lastPrice: number; // USD per share
+}
+
+export interface HoldingSyncResult {
+  added: number;
+  updated: number;
+  removed: number;
+}
+
+// Asset classes a Webull position can correspond to. Anything else the user
+// holds (crypto, Thai stocks, cash) is invisible to this broker and must
+// never be touched by the sync — see the removal guard below.
+const BROKER_ASSET_CLASSES = new Set<AssetClass>(["foreign_stock", "etf"]);
+
+// Mirrors a broker's positions into holdings, making the broker
+// authoritative for the symbols it reports.
+//
+// Matching is by symbol rather than by a stored broker id, so a holding the
+// user originally typed in by hand gets adopted by the sync instead of
+// becoming a duplicate alongside the broker's copy.
+//
+// Removal is deliberately narrow: only holdings already marked
+// `source: "webull"` and absent from `positions` are deleted. A holding the
+// sync never created is never deleted, so a Webull-only view can't wipe out
+// crypto/Thai/cash positions it simply has no knowledge of. Callers must
+// only invoke this after a *successful* fetch — passing an empty array
+// because a request failed would otherwise delete every mirrored holding.
+export async function syncBrokerHoldings(
+  uid: string,
+  positions: BrokerPosition[],
+  existing: Holding[],
+  usdRate: number,
+  portfolioId?: string | null
+): Promise<HoldingSyncResult> {
+  const result: HoldingSyncResult = { added: 0, updated: 0, removed: 0 };
+  const seen = new Set<string>();
+
+  for (const position of positions) {
+    const symbol = position.symbol.toUpperCase();
+    seen.add(symbol);
+    const match = existing.find((h) => h.symbol.toUpperCase() === symbol);
+
+    // Broker quotes are USD; holdings store THB with the USD cost kept
+    // alongside. costPrice is already a true USD figure here, so avgCostUsd
+    // is exact rather than back-derived through today's rate.
+    const patch = {
+      quantity: position.quantity,
+      avgCost: position.costPrice * usdRate,
+      avgCostUsd: position.costPrice,
+      currentPrice: position.lastPrice * usdRate,
+      livePrice: true,
+      source: "webull" as const,
+    };
+
+    if (match) {
+      await updateHolding(uid, match.id, patch);
+      result.updated++;
+    } else {
+      await addHolding(uid, {
+        symbol,
+        name: symbol,
+        assetClass: "foreign_stock",
+        ...patch,
+        ...(portfolioId ? { portfolioId } : {}),
+      });
+      result.added++;
+    }
+  }
+
+  for (const holding of existing) {
+    if (holding.source !== "webull") continue;
+    if (!BROKER_ASSET_CLASSES.has(holding.assetClass)) continue;
+    if (seen.has(holding.symbol.toUpperCase())) continue;
+    await deleteHolding(uid, holding.id);
+    result.removed++;
+  }
+
+  return result;
+}
+
 // ---- Transactions ----
 export function watchTransactions(
   uid: string,

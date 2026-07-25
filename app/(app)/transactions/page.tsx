@@ -154,6 +154,11 @@ export default function TransactionsPage() {
     allTransactions: Transaction[]
   ) {
     const existing = holdings.find((h) => h.symbol === symbol);
+    // Broker-mirrored holdings are owned by the Webull sync, which reports
+    // the real position at the broker. The app's transaction history may
+    // only cover the window that was imported, so recomputing from it would
+    // overwrite a correct quantity with a partial one.
+    if (existing?.source === "webull") return;
     // Fallback rate only fills in legacy transactions that predate
     // priceUsd; newer ones carry their own locked entry-time USD price.
     const usdRate = await fetchUsableUsdRate();
