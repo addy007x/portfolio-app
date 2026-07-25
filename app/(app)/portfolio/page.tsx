@@ -15,6 +15,7 @@ import {
   type HoldingSyncResult,
 } from "@/lib/firestore";
 import { fetchFxRateToThb } from "@/lib/priceFeed";
+import { importWebullTrades } from "@/lib/webullImport";
 import type { Holding, AssetClass } from "@/lib/types";
 import { ASSET_CLASS_COLOR, assetClassLabel } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
@@ -29,6 +30,13 @@ import { usePortfolios } from "@/lib/portfolioContext";
 // "cash" is intentionally not offered when adding new assets; existing cash
 // holdings still render, and the select re-adds the option while editing one.
 const ASSET_CLASSES: AssetClass[] = ["th_stock", "foreign_stock", "etf", "crypto"];
+
+// Fixed anchor for the automatic Webull trade sync below — deliberately NOT
+// `new Date()`, which would silently narrow to "just today" on every run
+// and miss trades placed on a day the app wasn't opened. Older trades were
+// already brought in through the one-time manual import in Settings; this
+// only needs to catch what happens from here on.
+const WEBULL_AUTO_IMPORT_SINCE = "2026-07-25";
 
 export default function PortfolioPage() {
   const { user } = useAuth();
@@ -48,6 +56,7 @@ export default function PortfolioPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncNotice, setSyncNotice] = useState<HoldingSyncResult | null>(null);
+  const [tradeSyncNotice, setTradeSyncNotice] = useState<number | null>(null);
   const [holdingsLoaded, setHoldingsLoaded] = useState(false);
 
   useEffect(() => {
@@ -129,6 +138,24 @@ export default function PortfolioPage() {
         }
       } catch {
         // Offline or route unavailable — keep the existing holdings as-is.
+      }
+
+      // Separate try/catch: a positions failure above shouldn't also skip
+      // the trade sync, since they hit different endpoints and can fail
+      // independently (e.g. positions needs an account id, orders doesn't).
+      try {
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const outcome = await importWebullTrades(
+          user,
+          WEBULL_AUTO_IMPORT_SINCE,
+          todayIso,
+          currentPortfolioId
+        );
+        if (!cancelled && outcome.ok && outcome.summary.added > 0) {
+          setTradeSyncNotice(outcome.summary.added);
+        }
+      } catch {
+        // Same as above: leave transactions as they were.
       }
     })();
 
@@ -229,6 +256,20 @@ export default function PortfolioPage() {
               updated: syncNotice.updated + syncNotice.added,
               removed: syncNotice.removed,
             })}
+          </span>
+          <Icon name="close" style={{ fontSize: 15 }} />
+        </button>
+      )}
+
+      {tradeSyncNotice !== null && (
+        <button
+          onClick={() => setTradeSyncNotice(null)}
+          className="w-full flex items-center gap-2 rounded-[12px] px-3 py-2 mb-3 text-left"
+          style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+        >
+          <Icon name="receipt_long" style={{ fontSize: 17 }} />
+          <span className="flex-1 text-[11.5px]">
+            {t("portfolio.tradesSynced", { added: tradeSyncNotice })}
           </span>
           <Icon name="close" style={{ fontSize: 15 }} />
         </button>

@@ -3,13 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import {
-  addTransaction,
-  getImportedOrderIds,
-  getUserProfile,
-  updateUserProfile,
-} from "@/lib/firestore";
-import { fetchFxRateToThb } from "@/lib/priceFeed";
+import { getUserProfile, updateUserProfile } from "@/lib/firestore";
+import { importWebullTrades } from "@/lib/webullImport";
 import { usePortfolios } from "@/lib/portfolioContext";
 import { Card, Icon } from "@/components/Card";
 import { FormInput } from "@/components/Modal";
@@ -118,8 +113,8 @@ export default function SettingsPage() {
   }
 
   // Pulls filled orders from the owner's Webull account and turns the ones
-  // not already imported into transactions. Webull has no Thai market, so
-  // everything here is USD-quoted (see lib/webull.ts).
+  // not already imported into transactions. See lib/webullImport.ts — this
+  // is also used by the Portfolio page's automatic sync.
   async function handleImportWebull() {
     if (!user || importing) return;
     setImportResult(null);
@@ -129,76 +124,23 @@ export default function SettingsPage() {
     }
     setImporting(true);
     try {
-      const idToken = await user.getIdToken();
-      const res = await fetch("/api/webull/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken, startDate: importFrom, endDate: importTo }),
-      });
-      const data = (await res.json()) as {
-        ok: boolean;
-        error?: string;
-        orders?: Array<{
-          orderId: string;
-          symbol: string;
-          side: "buy" | "sell";
-          quantity: number;
-          price: number;
-          filledAt: string;
-        }>;
-      };
-
-      if (!data.ok) {
+      const outcome = await importWebullTrades(user, importFrom, importTo, currentPortfolioId);
+      if (!outcome.ok) {
         // Unknown codes must not leak a raw dictionary key into the UI —
         // t() returns the key verbatim when it has no entry.
-        const key = `settings.webullErr.${data.error ?? "undefined"}`;
+        const key = `settings.webullErr.${outcome.error}`;
         const detail = t(key);
         setImportResult({ ok: false, detail: detail === key ? t("settings.webullErr.undefined") : detail });
         return;
       }
-
-      const orders = data.orders ?? [];
-      const alreadyImported = await getImportedOrderIds(user.uid, "webull");
-      const fresh = orders.filter((o) => !alreadyImported.has(o.orderId));
-
-      if (!fresh.length) {
-        setImportResult({
-          ok: true,
-          detail: t("settings.webullNothingNew", { found: orders.length }),
-        });
-        return;
-      }
-
-      // Webull prices are USD. The app stores THB as the primary figure with
-      // priceUsd frozen alongside. Ideally each order would convert at the
-      // rate on its own fill date; only today's rate is available here, so
-      // the THB figure is an approximation while priceUsd stays exact.
-      const fxRate = await fetchFxRateToThb("USD");
-
-      for (const order of fresh) {
-        await addTransaction(user.uid, {
-          date: order.filledAt,
-          type: order.side,
-          symbol: order.symbol,
-          quantity: order.quantity,
-          price: order.price * fxRate,
-          priceUsd: order.price,
-          totalValue: order.price * fxRate * order.quantity,
-          source: "webull",
-          externalId: order.orderId,
-          ...(currentPortfolioId ? { portfolioId: currentPortfolioId } : {}),
-        });
-      }
-
+      const { totalFound, added, skipped } = outcome.summary;
       setImportResult({
         ok: true,
-        detail: t("settings.webullImported", {
-          added: fresh.length,
-          skipped: orders.length - fresh.length,
-        }),
+        detail:
+          added === 0
+            ? t("settings.webullNothingNew", { found: totalFound })
+            : t("settings.webullImported", { added, skipped }),
       });
-    } catch {
-      setImportResult({ ok: false, detail: t("settings.webullErr.network") });
     } finally {
       setImporting(false);
     }

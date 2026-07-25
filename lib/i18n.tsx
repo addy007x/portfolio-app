@@ -202,6 +202,10 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
     th: "ซิงค์จาก Webull แล้ว: อัปเดต {updated} รายการ, ลบ {removed} รายการ",
     en: "Synced from Webull: {updated} updated, {removed} removed",
   },
+  "portfolio.tradesSynced": {
+    th: "นำเข้าเทรดใหม่จาก Webull {added} รายการ",
+    en: "Imported {added} new trades from Webull",
+  },
   "portfolio.empty": {
     th: "ยังไม่มีสินทรัพย์ในพอร์ต กดปุ่ม + เพื่อเพิ่มรายการแรก",
     en: "No assets in this portfolio yet. Tap + to add your first one.",
