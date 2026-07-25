@@ -16,6 +16,26 @@ import { FormInput } from "@/components/Modal";
 import { useCurrencyDisplay } from "@/lib/currencyDisplay";
 import { useLanguage, type Language } from "@/lib/i18n";
 import { useTheme, type ThemePreference } from "@/lib/themeContext";
+import { formatBaht, formatSignedBaht } from "@/lib/format";
+
+interface WebullPositionView {
+  symbol: string;
+  quantity: number;
+  costPrice: number;
+  lastPrice: number;
+  unrealizedPnl: number;
+  currency: string;
+}
+interface WebullBalanceView {
+  totalMarketValue: number;
+  totalCashBalance: number;
+  totalUnrealizedPnl: number;
+  currency: string;
+}
+
+function formatUsd(value: number): string {
+  return "$" + value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 const todayIso = new Date().toISOString().slice(0, 10);
 const oneYearAgoIso = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString().slice(0, 10);
@@ -40,6 +60,10 @@ export default function SettingsPage() {
   const [importTo, setImportTo] = useState(todayIso);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ ok: boolean; detail: string } | null>(null);
+  const [positionsLoading, setPositionsLoading] = useState(false);
+  const [positionsError, setPositionsError] = useState<string | null>(null);
+  const [positions, setPositions] = useState<WebullPositionView[] | null>(null);
+  const [balance, setBalance] = useState<WebullBalanceView | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -177,6 +201,42 @@ export default function SettingsPage() {
       setImportResult({ ok: false, detail: t("settings.webullErr.network") });
     } finally {
       setImporting(false);
+    }
+  }
+
+  // Read-only view of current Webull holdings — separate from the import
+  // flow above, and from /api/prices, since /openapi/assets/* needs only
+  // the account/trading permission already granted, not the (unpurchased)
+  // market-data subscription that blocks live US quotes elsewhere.
+  async function handleLoadPositions() {
+    if (!user || positionsLoading) return;
+    setPositionsError(null);
+    setPositionsLoading(true);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/webull/positions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        positions?: WebullPositionView[];
+        balance?: WebullBalanceView | null;
+      };
+      if (!data.ok) {
+        const key = `settings.webullErr.${data.error ?? "undefined"}`;
+        const detail = t(key);
+        setPositionsError(detail === key ? t("settings.webullErr.undefined") : detail);
+        return;
+      }
+      setPositions(data.positions ?? []);
+      setBalance(data.balance ?? null);
+    } catch {
+      setPositionsError(t("settings.webullErr.network"));
+    } finally {
+      setPositionsLoading(false);
     }
   }
 
@@ -407,6 +467,96 @@ export default function SettingsPage() {
             }}
           >
             {importResult.detail}
+          </div>
+        )}
+      </Card>
+
+      <Card className="mt-3">
+        <div className="flex items-center gap-2 mb-1">
+          <Icon name="pie_chart" style={{ fontSize: 20, color: "var(--muted)" }} />
+          <span className="text-sm font-bold">{t("settings.webullAssetsTitle")}</span>
+        </div>
+        <div className="text-[11px] mb-3" style={{ color: "var(--muted)" }}>
+          {t("settings.webullAssetsHelp")}
+        </div>
+
+        <button
+          onClick={handleLoadPositions}
+          disabled={positionsLoading}
+          className="w-full rounded-[12px] py-2.5 text-sm font-bold flex items-center justify-center gap-2"
+          style={{
+            background: "var(--surface2)",
+            color: "var(--accent)",
+            opacity: positionsLoading ? 0.7 : 1,
+          }}
+        >
+          <Icon name={positionsLoading ? "hourglass_top" : "refresh"} style={{ fontSize: 17 }} />
+          {positionsLoading ? t("settings.webullLoading") : t("settings.webullRefresh")}
+        </button>
+
+        {positionsError && (
+          <div
+            className="text-[11.5px] rounded-[10px] px-3 py-2 mt-3"
+            style={{ background: "rgba(224,57,62,0.12)", color: "var(--down)" }}
+          >
+            {positionsError}
+          </div>
+        )}
+
+        {balance && (
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <div className="rounded-[10px] px-3 py-2" style={{ background: "var(--surface2)" }}>
+              <div className="text-[10.5px]" style={{ color: "var(--muted)" }}>
+                {t("settings.webullMarketValue")}
+              </div>
+              <div className="text-sm font-bold">{formatBaht(balance.totalMarketValue)}</div>
+            </div>
+            <div className="rounded-[10px] px-3 py-2" style={{ background: "var(--surface2)" }}>
+              <div className="text-[10.5px]" style={{ color: "var(--muted)" }}>
+                {t("settings.webullUnrealizedPnl")}
+              </div>
+              <div
+                className="text-sm font-bold"
+                style={{ color: balance.totalUnrealizedPnl >= 0 ? "var(--accent)" : "var(--down)" }}
+              >
+                {formatSignedBaht(balance.totalUnrealizedPnl)}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {positions && positions.length > 0 && (
+          <div className="flex flex-col gap-2 mt-3">
+            {positions.map((p) => (
+              <div
+                key={p.symbol}
+                className="flex items-center justify-between rounded-[10px] px-3 py-2"
+                style={{ background: "var(--surface2)" }}
+              >
+                <div>
+                  <div className="text-sm font-bold">{p.symbol}</div>
+                  <div className="text-[10.5px]" style={{ color: "var(--muted)" }}>
+                    {p.quantity} @ {formatUsd(p.costPrice)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-bold">{formatUsd(p.lastPrice)}</div>
+                  <div
+                    className="text-[10.5px] font-semibold"
+                    style={{ color: p.unrealizedPnl >= 0 ? "var(--accent)" : "var(--down)" }}
+                  >
+                    {p.unrealizedPnl >= 0 ? "+" : ""}
+                    {formatUsd(p.unrealizedPnl)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {positions && positions.length === 0 && (
+          <div className="text-[11.5px] text-center mt-3" style={{ color: "var(--muted)" }}>
+            {t("settings.webullNoPositions")}
           </div>
         )}
       </Card>

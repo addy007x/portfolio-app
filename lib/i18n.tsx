@@ -504,6 +504,16 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   },
   "settings.webullErr.network": { th: "เชื่อมต่อไม่สำเร็จ", en: "Network error" },
   "settings.webullErr.undefined": { th: "เกิดข้อผิดพลาด", en: "Something went wrong" },
+  "settings.webullAssetsTitle": { th: "สินทรัพย์ใน Webull", en: "Webull holdings" },
+  "settings.webullAssetsHelp": {
+    th: "ดูยอดถือครองปัจจุบันในบัญชี Webull (แสดงอย่างเดียว ไม่บันทึกเข้าพอร์ต)",
+    en: "View current holdings in your Webull account (display only — not saved into your portfolio)",
+  },
+  "settings.webullRefresh": { th: "โหลดสินทรัพย์", en: "Load holdings" },
+  "settings.webullLoading": { th: "กำลังโหลด...", en: "Loading..." },
+  "settings.webullMarketValue": { th: "มูลค่ารวม", en: "Total value" },
+  "settings.webullUnrealizedPnl": { th: "กำไร/ขาดทุน", en: "Unrealized P/L" },
+  "settings.webullNoPositions": { th: "ไม่มีสินทรัพย์ในบัญชีนี้", en: "No holdings in this account" },
 };
 
 interface LanguageContextValue {

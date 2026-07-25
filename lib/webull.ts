@@ -259,6 +259,71 @@ export interface WebullOrder {
   filledAt: string; // ISO date (YYYY-MM-DD)
 }
 
+// ---- Positions & balance ----
+// Unlike /openapi/market-data/stock/snapshot, these live under the Trading
+// API's /openapi/assets/* namespace, so they work with just the account/
+// trading permission already granted — no separate market-data subscription
+// needed. last_price here is a live quote, confirmed working 2026-07-25.
+
+export interface WebullPosition {
+  symbol: string;
+  quantity: number;
+  costPrice: number; // USD per share, average cost
+  lastPrice: number; // USD per share, live
+  unrealizedPnl: number; // USD
+  currency: string;
+}
+
+// Confirmed 2026-07-25 against a real account:
+//   [{ "currency": "USD", "quantity": "1.08075", "position_id": "...",
+//      "symbol": "NVDA", "instrument_type": "EQUITY", "cost_price": "200.31",
+//      "last_price": "206.80", "unrealized_profit_loss": "7.02" }, ...]
+export async function fetchWebullPositions(accountId: string): Promise<WebullPosition[]> {
+  const payload = await webullRequest<unknown>("/openapi/assets/positions", {
+    account_id: accountId,
+  });
+  const rows = Array.isArray(payload) ? (payload as Array<Record<string, unknown>>) : [];
+
+  const positions: WebullPosition[] = [];
+  for (const row of rows) {
+    const symbol = typeof row.symbol === "string" ? row.symbol.toUpperCase() : null;
+    const quantity = firstFiniteNumber(row, ["quantity"]);
+    const costPrice = firstFiniteNumber(row, ["cost_price"]);
+    const lastPrice = firstFiniteNumber(row, ["last_price"]);
+    const unrealizedPnl = firstFiniteNumber(row, ["unrealized_profit_loss"]);
+    const currency = typeof row.currency === "string" ? row.currency : "USD";
+    if (!symbol || quantity === null || costPrice === null || lastPrice === null) continue;
+    positions.push({ symbol, quantity, costPrice, lastPrice, unrealizedPnl: unrealizedPnl ?? 0, currency });
+  }
+  return positions;
+}
+
+export interface WebullBalance {
+  totalMarketValue: number;
+  totalCashBalance: number;
+  totalUnrealizedPnl: number;
+  currency: string; // the currency the totals above are denominated in
+}
+
+// Confirmed 2026-07-25: { "total_asset_currency": "THB",
+//   "total_market_value": "25167.82", "total_cash_balance": "2632.26",
+//   "total_unrealized_profit_loss": "-330.96", "account_currency_assets": [...] }
+export async function fetchWebullBalance(accountId: string): Promise<WebullBalance | null> {
+  const payload = await webullRequest<Record<string, unknown>>("/openapi/assets/balance", {
+    account_id: accountId,
+  });
+  const totalMarketValue = firstFiniteNumber(payload, ["total_market_value"]);
+  const totalCashBalance = firstFiniteNumber(payload, ["total_cash_balance"]);
+  const totalUnrealizedPnl = firstFiniteNumber(payload, ["total_unrealized_profit_loss"]);
+  if (totalMarketValue === null || totalCashBalance === null) return null;
+  return {
+    totalMarketValue,
+    totalCashBalance,
+    totalUnrealizedPnl: totalUnrealizedPnl ?? 0,
+    currency: typeof payload.total_asset_currency === "string" ? payload.total_asset_currency : "THB",
+  };
+}
+
 // Confirmed against a real account 2026-07-25 (see webull-openapi-findings
 // memory): /openapi/trade/order/history returns an array of "combo"
 // wrappers, each holding one or more actual orders:
@@ -332,4 +397,53 @@ export async function fetchWebullOrderHistory(args: {
     }
   }
   return orders;
+}
+
+// ---- Route auth gate ----
+// Every /api/webull/* route needs the same check: the Webull credentials
+// belong to one person, but this app's signup is open, so without a check
+// any signed-up user could read the owner's trades/positions through these
+// routes. Centralised here so the security-critical logic can't drift out
+// of sync between routes that both need it.
+//
+// The caller's uid is verified against Google's Identity Toolkit rather
+// than trusted from the client (which anyone could forge), avoiding a
+// firebase-admin dependency for just this one check.
+const IDENTITY_LOOKUP = "https://identitytoolkit.googleapis.com/v1/accounts:lookup";
+
+async function verifiedUid(idToken: string): Promise<string | null> {
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const res = await fetch(`${IDENTITY_LOOKUP}?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { users?: Array<{ localId?: string }> };
+    return data.users?.[0]?.localId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export type WebullAuthResult =
+  | { ok: true }
+  | { ok: false; error: "webull_not_configured" | "owner_not_configured" | "missing_token" | "invalid_token" | "forbidden"; status: number };
+
+export async function assertWebullOwner(idToken: string | undefined): Promise<WebullAuthResult> {
+  if (!webullConfigured()) return { ok: false, error: "webull_not_configured", status: 503 };
+  const ownerUid = process.env.WEBULL_OWNER_UID;
+  // Fail closed: without a designated owner there is no way to tell who is
+  // entitled to this data, so serve it to nobody.
+  if (!ownerUid) return { ok: false, error: "owner_not_configured", status: 503 };
+  if (!idToken) return { ok: false, error: "missing_token", status: 401 };
+
+  const uid = await verifiedUid(idToken);
+  if (!uid) return { ok: false, error: "invalid_token", status: 401 };
+  if (uid !== ownerUid) return { ok: false, error: "forbidden", status: 403 };
+  return { ok: true };
 }

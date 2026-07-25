@@ -600,7 +600,11 @@ export async function GET(req: NextRequest) {
       try {
         fromWebull = await fetchWebullUsPrices(uncached);
       } catch (err) {
-        console.error("Webull US quotes failed, falling back to Yahoo", err);
+        // Logged as a message only, not the full error/stack: this route is
+        // polled continuously by LivePriceUpdater, so until Webull's market-
+        // data subscription is added this would otherwise print a full
+        // trace on every poll for every client.
+        console.error("Webull US quotes failed, falling back to Yahoo:", (err as Error).message);
       }
     }
 
