@@ -89,8 +89,12 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const status = err instanceof WebullError ? err.status : 0;
     console.error("Webull order history failed", err);
+    // 401 here is almost always the access token (separate from the request
+    // signature) being unapproved or past its ~15-day validity — that step
+    // needs a human in the Webull mobile app, so it can't be auto-refreshed
+    // in this request; the owner has to rerun the bootstrap.
     return Response.json(
-      { ok: false, error: status === 403 ? "webull_forbidden" : "webull_request_failed" },
+      { ok: false, error: status === 401 ? "webull_token_expired" : "webull_request_failed" },
       { status: 502 }
     );
   }

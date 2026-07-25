@@ -486,9 +486,9 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
     th: "ยืนยันตัวตนไม่สำเร็จ ลองเข้าสู่ระบบใหม่",
     en: "Authentication failed — try signing in again",
   },
-  "settings.webullErr.webull_forbidden": {
-    th: "Webull ปฏิเสธคำขอ (อาจยังไม่ได้สมัคร market data)",
-    en: "Webull rejected the request (market data subscription may be missing)",
+  "settings.webullErr.webull_token_expired": {
+    th: "Webull access token หมดอายุหรือยังไม่ได้อนุมัติ — ต้องอนุมัติใหม่ในแอป Webull มือถือ (แอป > ข้อความ > OpenAPI Notifications) แล้วให้ผู้ดูแลอัปเดตค่าใน .env.local",
+    en: "Webull access token expired or not yet approved — approve it again in the Webull mobile app (App > Messages > OpenAPI Notifications), then have the operator update .env.local",
   },
   "settings.webullErr.webull_request_failed": {
     th: "เรียก Webull ไม่สำเร็จ",

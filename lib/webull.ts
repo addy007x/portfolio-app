@@ -15,6 +15,20 @@
 // Note the published signature docs describe an older MD5 + HMAC-SHA1
 // scheme whose worked example cannot be reproduced; the SDK hardcodes
 // sha_hmac256_new, so SHA256 + HMAC-SHA256 is what the servers accept.
+//
+// A correct signature alone isn't enough to call anything, though: this
+// account has token_check_enabled, so every request also needs an
+// x-access-token. That token is issued via /openapi/auth/token/create and
+// starts PENDING — it only becomes usable once a human approves it in the
+// Webull mobile app (Messages > OpenAPI Notifications > Check Now, SMS
+// code), a step Webull's own SDK just polls and waits for indefinitely.
+// That can't happen inside a live web request, so this module does not
+// attempt it: WEBULL_ACCESS_TOKEN/WEBULL_ACCESS_TOKEN_EXPIRES are bootstrapped
+// out-of-band (see the scratchpad probe script) and just read here. The
+// token is valid ~15 days after approval, then needs
+// /openapi/auth/token/refresh (not yet wired up — re-run the bootstrap
+// probe when fetchWebullAccounts/fetchWebullOrderHistory starts failing
+// with WebullError "token_expired" or "token_not_configured").
 import crypto from "node:crypto";
 
 const REGION_HOSTS: Record<string, string> = {
@@ -35,6 +49,7 @@ interface WebullConfig {
   appKey: string;
   appSecret: string;
   host: string;
+  accessToken: string | null;
 }
 
 function readConfig(): WebullConfig | null {
@@ -43,7 +58,13 @@ function readConfig(): WebullConfig | null {
   if (!appKey || !appSecret) return null;
   const region = (process.env.WEBULL_REGION ?? "th").toLowerCase();
   const host = process.env.WEBULL_HOST ?? REGION_HOSTS[region] ?? REGION_HOSTS.th;
-  return { appKey, appSecret, host };
+
+  const expiresRaw = process.env.WEBULL_ACCESS_TOKEN_EXPIRES;
+  const expires = expiresRaw ? Number(expiresRaw) : NaN;
+  const tokenIsFresh = Number.isFinite(expires) && expires > Date.now();
+  const accessToken = tokenIsFresh ? (process.env.WEBULL_ACCESS_TOKEN ?? null) : null;
+
+  return { appKey, appSecret, host, accessToken };
 }
 
 export function webullConfigured(): boolean {
@@ -113,11 +134,22 @@ async function webullRequest<T>(
   assertServer();
   const cfg = readConfig();
   if (!cfg) throw new WebullError("Webull credentials are not configured", 0);
+  if (!cfg.accessToken) {
+    // Every endpoint on this account requires x-access-token (config has
+    // token_check_enabled=true); without it Webull returns a flat 401
+    // INVALID_TOKEN regardless of how correct the signature is. There's no
+    // way to obtain one here — see the module comment above.
+    throw new WebullError(
+      "Webull access token missing or expired — rerun the token bootstrap and update WEBULL_ACCESS_TOKEN",
+      401
+    );
+  }
 
   const headers: Record<string, string> = {
     ...signHeaders(cfg, pathname, query, body),
     "x-version": version,
     "Content-Type": "application/json",
+    "x-access-token": cfg.accessToken,
   };
 
   const qs = new URLSearchParams(query).toString();
@@ -227,24 +259,52 @@ export interface WebullOrder {
   filledAt: string; // ISO date (YYYY-MM-DD)
 }
 
-function parseFilledDate(row: Record<string, unknown>): string | null {
-  const raw =
-    row.filled_time ?? row.filledTime ?? row.updateTime ?? row.update_time ?? row.create_time;
-  if (typeof raw === "number") return new Date(raw).toISOString().slice(0, 10);
-  if (typeof raw === "string") {
-    // Epoch millis sometimes arrive as a numeric string.
-    const asNumber = Number(raw);
-    const date = Number.isFinite(asNumber) && raw.trim() !== "" ? new Date(asNumber) : new Date(raw);
-    if (!Number.isNaN(date.getTime())) return date.toISOString().slice(0, 10);
-  }
-  return null;
+// Confirmed against a real account 2026-07-25 (see webull-openapi-findings
+// memory): /openapi/trade/order/history returns an array of "combo"
+// wrappers, each holding one or more actual orders:
+//
+//   [{ client_order_id, combo_type, orders: [{
+//        symbol, side: "BUY"|"SELL", status: "FILLED"|..., order_id,
+//        order_type, instrument_type, filled_quantity: "0.00254" (string,
+//        fractional shares), filled_price: "1176.9656" (string, USD),
+//        filled_time_at: "2026-07-20T14:37:43.949Z", time_in_force, ...
+//     }] }, ...]
+//
+// Every combo observed held exactly one order, but the wrapper implies that
+// isn't guaranteed (e.g. bracket/OCO orders), so this flattens rather than
+// assuming a 1:1 shape.
+interface RawWebullOrder {
+  symbol?: unknown;
+  side?: unknown;
+  status?: unknown;
+  order_id?: unknown;
+  filled_quantity?: unknown;
+  filled_price?: unknown;
+  filled_time_at?: unknown;
 }
 
-// Only fully-filled orders become transactions — pending and cancelled ones
-// never moved any shares, and importing them would corrupt cost basis.
-function isFilled(row: Record<string, unknown>): boolean {
-  const status = row.status ?? row.order_status ?? row.orderStatus;
-  return typeof status === "string" && status.toUpperCase() === "FILLED";
+function parseOrder(raw: RawWebullOrder): WebullOrder | null {
+  if (typeof raw.status !== "string" || raw.status.toUpperCase() !== "FILLED") return null; // still open/cancelled orders moved no shares
+
+  const symbol = typeof raw.symbol === "string" ? raw.symbol.toUpperCase() : null;
+  const side =
+    typeof raw.side === "string" && raw.side.toUpperCase() === "BUY"
+      ? "buy"
+      : typeof raw.side === "string" && raw.side.toUpperCase() === "SELL"
+        ? "sell"
+        : null;
+  const quantity = firstFiniteNumber(raw as Record<string, unknown>, ["filled_quantity"]);
+  const price = firstFiniteNumber(raw as Record<string, unknown>, ["filled_price"]);
+  const filledAt =
+    typeof raw.filled_time_at === "string" && !Number.isNaN(Date.parse(raw.filled_time_at))
+      ? raw.filled_time_at.slice(0, 10)
+      : null;
+  const orderId = typeof raw.order_id === "string" ? raw.order_id : null;
+
+  if (!symbol || !side || quantity === null || quantity <= 0 || price === null || !filledAt || !orderId) {
+    return null;
+  }
+  return { orderId, symbol, side, quantity, price, filledAt };
 }
 
 export async function fetchWebullOrderHistory(args: {
@@ -260,53 +320,16 @@ export async function fetchWebullOrderHistory(args: {
     page_size: String(args.pageSize ?? 100),
   });
 
-  const rows: Array<Record<string, unknown>> = Array.isArray(payload)
-    ? (payload as Array<Record<string, unknown>>)
-    : Array.isArray((payload as { data?: unknown })?.data)
-      ? ((payload as { data: Array<Record<string, unknown>> }).data)
-      : [];
+  const combos: Array<{ orders?: RawWebullOrder[] }> = Array.isArray(payload)
+    ? (payload as Array<{ orders?: RawWebullOrder[] }>)
+    : [];
 
   const orders: WebullOrder[] = [];
-  for (const row of rows) {
-    if (!isFilled(row)) continue;
-
-    const symbol = SYMBOL_KEYS.map((k) => row[k]).find((v) => typeof v === "string") as
-      | string
-      | undefined;
-    const rawSide = row.side ?? row.order_side ?? row.action;
-    const quantity = firstFiniteNumber(row, ["filled_quantity", "filledQuantity", "quantity"]);
-    const price = firstFiniteNumber(row, [
-      "avg_filled_price",
-      "avgFilledPrice",
-      "filled_price",
-      "price",
-    ]);
-    const filledAt = parseFilledDate(row);
-    const orderId = row.order_id ?? row.orderId ?? row.client_order_id;
-
-    if (
-      !symbol ||
-      typeof rawSide !== "string" ||
-      quantity === null ||
-      quantity <= 0 ||
-      price === null ||
-      !filledAt ||
-      (typeof orderId !== "string" && typeof orderId !== "number")
-    ) {
-      continue;
+  for (const combo of combos) {
+    for (const raw of combo.orders ?? []) {
+      const order = parseOrder(raw);
+      if (order) orders.push(order);
     }
-
-    const side = rawSide.toUpperCase() === "BUY" ? "buy" : rawSide.toUpperCase() === "SELL" ? "sell" : null;
-    if (!side) continue;
-
-    orders.push({
-      orderId: String(orderId),
-      symbol: symbol.toUpperCase(),
-      side,
-      quantity,
-      price,
-      filledAt,
-    });
   }
   return orders;
 }
