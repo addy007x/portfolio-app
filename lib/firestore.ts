@@ -116,7 +116,21 @@ export async function syncBrokerHoldings(
   for (const position of positions) {
     const symbol = position.symbol.toUpperCase();
     seen.add(symbol);
-    const match = existing.find((h) => h.symbol.toUpperCase() === symbol);
+    // All matches, not just the first: a caller that ran this against a
+    // not-yet-loaded holdings list once created duplicates, and collapsing
+    // them here means the next successful sync repairs that automatically
+    // instead of needing a one-off cleanup.
+    const matches = existing
+      .filter((h) => h.symbol.toUpperCase() === symbol)
+      // Keep a hand-entered row over a mirrored one — it's the copy that may
+      // carry transaction history — then order by id so the choice is stable
+      // across runs rather than depending on query order.
+      .sort((a, b) => {
+        const aMirrored = a.source === "webull" ? 1 : 0;
+        const bMirrored = b.source === "webull" ? 1 : 0;
+        return aMirrored - bMirrored || a.id.localeCompare(b.id);
+      });
+    const match = matches[0];
 
     // Broker quotes are USD; holdings store THB with the USD cost kept
     // alongside. costPrice is already a true USD figure here, so avgCostUsd
@@ -133,6 +147,14 @@ export async function syncBrokerHoldings(
     if (match) {
       await updateHolding(uid, match.id, patch);
       result.updated++;
+      // Only ever drop the extra copies this sync itself could have made;
+      // a second hand-entered row for the same symbol is the user's own data
+      // and is left alone.
+      for (const duplicate of matches.slice(1)) {
+        if (duplicate.source !== "webull") continue;
+        await deleteHolding(uid, duplicate.id);
+        result.removed++;
+      }
     } else {
       await addHolding(uid, {
         symbol,

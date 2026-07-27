@@ -47,12 +47,25 @@ export function LivePriceUpdater() {
   // and prices sit stale for a full poll interval after every app open.
   const tickRef = useRef<(() => void) | null>(null);
   const firstSnapshotHandled = useRef(false);
+  // Whether the holdings subscription has delivered anything at all. The
+  // broker sync MUST NOT run before this: it matches broker positions
+  // against `holdingsRef` by symbol, so running it against a still-empty
+  // list makes every position look new and creates a duplicate holding for
+  // each one. Tracked separately from firstSnapshotHandled because that only
+  // fires for non-empty snapshots, which would leave a genuinely empty
+  // account never syncing at all.
+  const snapshotArrived = useRef(false);
 
   useEffect(() => {
     if (!user) return;
     const unsubscribe = watchHoldings(user.uid, (items) => {
       holdingsRef.current = items;
-      if (!firstSnapshotHandled.current && items.length > 0) {
+      const isFirst = !snapshotArrived.current;
+      snapshotArrived.current = true;
+      // Kick a tick as soon as real data lands, so the mount-time tick
+      // losing the race to the (async) snapshot doesn't leave prices stale
+      // for a full interval.
+      if (isFirst || (!firstSnapshotHandled.current && items.length > 0)) {
         firstSnapshotHandled.current = true;
         tickRef.current?.();
       }
@@ -79,13 +92,17 @@ export function LivePriceUpdater() {
         // fix (not configured, wrong owner, token needs re-approval) — for
         // users without Webull that would otherwise be a failed request every
         // poll, forever.
-        const broker = brokerDisabledRef.current
-          ? null
-          : await syncWebullPositions(
-              currentUser,
-              holdingsRef.current,
-              defaultPortfolioIdRef.current
-            );
+        // snapshotArrived gate: see its declaration. Without it the
+        // mount-time tick syncs against an empty holdings list and duplicates
+        // every broker position.
+        const broker =
+          brokerDisabledRef.current || !snapshotArrived.current
+            ? null
+            : await syncWebullPositions(
+                currentUser,
+                holdingsRef.current,
+                defaultPortfolioIdRef.current
+              );
         if (broker?.permanentlyUnavailable) brokerDisabledRef.current = true;
 
         await refreshLivePrices(uid, holdingsRef.current, broker?.handledSymbols);
