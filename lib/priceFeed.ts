@@ -175,8 +175,20 @@ export function isLivePriceEligible(h: Holding): boolean {
   return false;
 }
 
-export async function refreshLivePrices(uid: string, holdings: Holding[]) {
-  const eligible = holdings.filter(isLivePriceEligible);
+// `brokerPricedSymbols` names symbols a broker sync just priced from the
+// user's own account this cycle. Those are left alone so the generic feed
+// doesn't immediately overwrite the broker's figures with a third party's —
+// the broker is authoritative for positions it actually holds. Callers pass
+// an empty set when the broker sync failed or isn't configured, which is
+// what makes falling back to this feed automatic rather than a special case.
+export async function refreshLivePrices(
+  uid: string,
+  holdings: Holding[],
+  brokerPricedSymbols: Set<string> = new Set()
+) {
+  const eligible = holdings.filter(
+    (h) => isLivePriceEligible(h) && !brokerPricedSymbols.has(h.symbol.toUpperCase())
+  );
   if (eligible.length === 0) return;
 
   const cryptoSymbols = Array.from(
