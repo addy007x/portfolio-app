@@ -448,12 +448,19 @@ function compound(quantity: number, apy: number, days: number): number {
 //   1. On/after the current segment: compound the stored balance forward.
 //   2. Inside a recorded prior segment: compound that segment's balance.
 //   3. Before the current segment on a position edited before segments were
-//      recorded: grow depositQuantity — the stored true deposit — forward
-//      from the original start date. Preferred over discounting the current
-//      balance backwards because depositQuantity is the same baseline
-//      earnPositionInterestEarned uses, so the daily rows sum to the
-//      lifetime interest figure instead of drifting a couple of percent from
-//      it. Exact whenever the edit didn't change the APY.
+//      recorded: interpolate between the two anchors that ARE known —
+//      depositQuantity at the original start, p.quantity at startDate —
+//      using the compound rate those two imply rather than p.apy.
+//
+//      Both anchors have to be honoured or something visibly breaks. Using
+//      p.apy from the deposit leaves a gap at startDate (depositQuantity was
+//      derived at the edit's wall-clock instant, while startDate is that
+//      day's midnight), and the whole discrepancy lands on the single day
+//      before the edit — that day showed ~0.82 where its neighbours showed
+//      ~0.96. Discounting p.quantity backwards instead is smooth but misses
+//      depositQuantity, so the rows stop summing to the lifetime interest
+//      figure, which uses it as the baseline. The implied rate absorbs the
+//      inconsistency and satisfies both.
 export function earnQuantityAt(p: EarnPosition, asOf: Date = new Date()): number {
   const origin = new Date(p.originalStartDate ?? p.startDate);
   if (asOf < origin) return 0; // genuinely before the deposit
@@ -471,7 +478,10 @@ export function earnQuantityAt(p: EarnPosition, asOf: Date = new Date()): number
   }
 
   const deposit = p.depositQuantity ?? p.quantity;
-  return compound(deposit, p.apy, daysBetweenExact(origin, asOf));
+  const spanDays = daysBetweenExact(origin, effectiveStart);
+  if (spanDays <= 0 || deposit <= 0) return deposit;
+  const impliedGrowthPerDay = Math.pow(p.quantity / deposit, 1 / spanDays);
+  return deposit * Math.pow(impliedGrowthPerDay, daysBetweenExact(origin, asOf));
 }
 
 export function earnPositionQuantity(p: EarnPosition, asOf: Date = new Date()): number {
@@ -518,14 +528,21 @@ export interface DailyInterest {
   thbInterest: number; // that day's coin interest valued at today's price
 }
 
-// Interest earned on each of the last `days` calendar days (fewer if the
-// position started more recently), derived from the same compounding
-// formula rather than a stored ledger — coin quantity on day minus coin
-// quantity the day before. On the deposit's first day, the baseline is the
-// deposited quantity itself (not 0), so that day shows the actual interest
-// accrued rather than the whole deposit misleadingly appearing as "interest".
-// THB value uses today's price throughout since historical prices aren't
-// available on the free tier this app runs on.
+// Interest credited on each calendar day of the position's life, derived
+// from the same compounding formula rather than a stored ledger.
+//
+// Each row spans that day's real calendar boundaries (midnight to midnight,
+// UTC to match the ISO date used as the label), clamped to the deposit
+// instant at the start and to `asOf` at the end. Rows used to span a rolling
+// 24 hours measured back from the current time instead, which straddled two
+// calendar dates each — so a row labelled "17 Jul" actually covered
+// yesterday-afternoon through this-afternoon, and the first row showed only
+// the few hours since midnight rather than a full day. Totals were right;
+// the per-day attribution was not.
+//
+// The last row is deliberately partial: today isn't over, so it shows
+// interest accrued so far. THB value uses today's price throughout since
+// historical prices aren't available on the free tier this app runs on.
 const MAX_DAILY_INTEREST_ROWS = 365;
 
 export function computeDailyInterest(
@@ -538,6 +555,7 @@ export function computeDailyInterest(
   // the latter, and anchoring here used to drop every day before the most
   // recent edit from the list.
   const start = new Date(p.originalStartDate ?? p.startDate);
+  if (asOf <= start) return [];
   // Default to the position's entire life, so an edit never appears to
   // truncate history. A fixed 14-day window did exactly that for anything
   // older than a fortnight. Capped so the list stays bounded.
@@ -545,17 +563,23 @@ export function computeDailyInterest(
   const span = Math.min(days ?? Math.max(1, lifetimeDays), MAX_DAILY_INTEREST_ROWS);
   const price = priceFor(p, priceMap);
   const result: DailyInterest[] = [];
+
   for (let i = span - 1; i >= 0; i--) {
-    const dayEnd = new Date(asOf);
-    dayEnd.setDate(dayEnd.getDate() - i);
-    if (dayEnd < start) continue;
-    const dayStart = new Date(dayEnd);
-    dayStart.setDate(dayStart.getDate() - 1);
-    const baselineQty =
-      dayStart < start ? earnQuantityAt(p, start) : earnQuantityAt(p, dayStart);
-    const coinInterest = earnQuantityAt(p, dayEnd) - baselineQty;
+    const dayStart = new Date(asOf);
+    dayStart.setUTCDate(dayStart.getUTCDate() - i);
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const dayEndBoundary = new Date(dayStart);
+    dayEndBoundary.setUTCDate(dayEndBoundary.getUTCDate() + 1);
+
+    // Clamp to the position's actual lifetime: the first day starts when the
+    // deposit was made, and today ends now.
+    const from = dayStart < start ? start : dayStart;
+    const to = dayEndBoundary > asOf ? asOf : dayEndBoundary;
+    if (to <= from) continue;
+
+    const coinInterest = earnQuantityAt(p, to) - earnQuantityAt(p, from);
     result.push({
-      date: dayEnd.toISOString().slice(0, 10),
+      date: dayStart.toISOString().slice(0, 10),
       coinInterest,
       thbInterest: coinInterest * price,
     });
