@@ -436,12 +436,46 @@ export type EarnPriceMap = Record<string, number>;
 // Coin quantity compounds continuously — this is the actual "interest paid
 // in the same coin" a real staking/savings product credits, independent of
 // that coin's market price.
+function compound(quantity: number, apy: number, days: number): number {
+  return quantity * Math.pow(1 + apy / 100 / 365, days);
+}
+
+// Coin quantity at any instant, including instants before the position's
+// current `startDate` — which an edit moves forward, so "before startDate"
+// is not the same as "before the deposit existed".
+//
+// Three cases, in order of accuracy:
+//   1. On/after the current segment: compound the stored balance forward.
+//   2. Inside a recorded prior segment: compound that segment's balance.
+//   3. Before the current segment on a position edited before segments were
+//      recorded: grow depositQuantity — the stored true deposit — forward
+//      from the original start date. Preferred over discounting the current
+//      balance backwards because depositQuantity is the same baseline
+//      earnPositionInterestEarned uses, so the daily rows sum to the
+//      lifetime interest figure instead of drifting a couple of percent from
+//      it. Exact whenever the edit didn't change the APY.
+export function earnQuantityAt(p: EarnPosition, asOf: Date = new Date()): number {
+  const origin = new Date(p.originalStartDate ?? p.startDate);
+  if (asOf < origin) return 0; // genuinely before the deposit
+
+  const effectiveStart = new Date(p.startDate);
+  if (asOf >= effectiveStart) {
+    return compound(p.quantity, p.apy, daysBetweenExact(effectiveStart, asOf));
+  }
+
+  for (const segment of [...(p.segments ?? [])].reverse()) {
+    const segmentStart = new Date(segment.startDate);
+    if (asOf >= segmentStart) {
+      return compound(segment.quantity, segment.apy, daysBetweenExact(segmentStart, asOf));
+    }
+  }
+
+  const deposit = p.depositQuantity ?? p.quantity;
+  return compound(deposit, p.apy, daysBetweenExact(origin, asOf));
+}
+
 export function earnPositionQuantity(p: EarnPosition, asOf: Date = new Date()): number {
-  const start = new Date(p.startDate);
-  if (asOf < start) return 0;
-  const days = daysBetweenExact(start, asOf);
-  const dailyRate = p.apy / 100 / 365;
-  return p.quantity * Math.pow(1 + dailyRate, days);
+  return earnQuantityAt(p, asOf);
 }
 
 function priceFor(p: EarnPosition, priceMap: EarnPriceMap): number {
@@ -492,23 +526,34 @@ export interface DailyInterest {
 // accrued rather than the whole deposit misleadingly appearing as "interest".
 // THB value uses today's price throughout since historical prices aren't
 // available on the free tier this app runs on.
+const MAX_DAILY_INTEREST_ROWS = 365;
+
 export function computeDailyInterest(
   p: EarnPosition,
   priceMap: EarnPriceMap,
-  days = 14,
+  days?: number,
   asOf: Date = new Date()
 ): DailyInterest[] {
-  const start = new Date(p.startDate);
+  // Span from the ORIGINAL deposit date, not `startDate`: an edit rebases
+  // the latter, and anchoring here used to drop every day before the most
+  // recent edit from the list.
+  const start = new Date(p.originalStartDate ?? p.startDate);
+  // Default to the position's entire life, so an edit never appears to
+  // truncate history. A fixed 14-day window did exactly that for anything
+  // older than a fortnight. Capped so the list stays bounded.
+  const lifetimeDays = Math.floor(daysBetweenExact(start, asOf)) + 1;
+  const span = Math.min(days ?? Math.max(1, lifetimeDays), MAX_DAILY_INTEREST_ROWS);
   const price = priceFor(p, priceMap);
   const result: DailyInterest[] = [];
-  for (let i = days - 1; i >= 0; i--) {
+  for (let i = span - 1; i >= 0; i--) {
     const dayEnd = new Date(asOf);
     dayEnd.setDate(dayEnd.getDate() - i);
     if (dayEnd < start) continue;
     const dayStart = new Date(dayEnd);
     dayStart.setDate(dayStart.getDate() - 1);
-    const baselineQty = dayStart < start ? p.quantity : earnPositionQuantity(p, dayStart);
-    const coinInterest = earnPositionQuantity(p, dayEnd) - baselineQty;
+    const baselineQty =
+      dayStart < start ? earnQuantityAt(p, start) : earnQuantityAt(p, dayStart);
+    const coinInterest = earnQuantityAt(p, dayEnd) - baselineQty;
     result.push({
       date: dayEnd.toISOString().slice(0, 10),
       coinInterest,
@@ -562,9 +607,12 @@ export function computeEarnSummary(
 
   const history: ValueSnapshot[] = [];
   if (positions.length > 0) {
+    // Original start dates, so an edited position's chart still covers its
+    // whole life rather than beginning at the edit.
+    const startDateOf = (p: EarnPosition) => p.originalStartDate ?? p.startDate;
     const earliest = positions.reduce(
-      (min, p) => (p.startDate < min ? p.startDate : min),
-      positions[0].startDate
+      (min, p) => (startDateOf(p) < min ? startDateOf(p) : min),
+      startDateOf(positions[0])
     );
     const lifetimeStart = new Date(earliest);
     const start = rangeStart && rangeStart > lifetimeStart ? rangeStart : lifetimeStart;

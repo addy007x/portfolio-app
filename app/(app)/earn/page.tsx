@@ -146,6 +146,13 @@ export default function EarnPage() {
         startDate: effectiveDate,
         depositQuantity: newBalance - accruedSoFar,
         originalStartDate: editing.originalStartDate ?? editing.startDate,
+        // Preserve the state being replaced so interest for the days it
+        // covered stays reconstructable exactly, instead of having to be
+        // inferred back from the new balance (see earnQuantityAt).
+        segments: [
+          ...(editing.segments ?? []),
+          { startDate: editing.startDate, quantity: editing.quantity, apy: editing.apy },
+        ],
       });
       setEditing(null);
     } finally {

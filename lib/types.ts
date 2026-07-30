@@ -167,6 +167,17 @@ export interface ValueSnapshot {
   portfolioId?: string;
 }
 
+// A superseded state of an Earn position, recorded when an edit rebases it.
+// Without this, an edit moves `startDate` forward and every day before it
+// becomes unreconstructable — the daily-interest list and the value chart
+// both simply started at the edit date, which read as the earlier history
+// having been deleted.
+export interface EarnSegment {
+  startDate: string; // YYYY-MM-DD — when this state took effect
+  quantity: number; // coin balance as of startDate
+  apy: number; // rate that applied during this stretch
+}
+
 export interface EarnPosition {
   id: string;
   symbol: string;
@@ -187,4 +198,9 @@ export interface EarnPosition {
   // The very first start date, kept for display after edits move
   // `startDate` to the rebase point.
   originalStartDate?: string;
+  // Prior states, oldest first — one per edit. Lets interest before each
+  // edit be reconstructed exactly. Absent on positions edited before this
+  // field existed; those fall back to discounting today's balance backwards
+  // (see earnQuantityAt), which is exact only if the APY never changed.
+  segments?: EarnSegment[];
 }
