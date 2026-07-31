@@ -331,33 +331,22 @@ export default function PlanPage() {
           const assetClass = h?.assetClass ?? "foreign_stock";
           const pace = paceRowFor(r.symbol);
           return (
+            // Two lines rather than one: at ~360px the single-row layout left
+            // the middle column about 60px wide, so both the invested figure
+            // and the contribution amount were truncated to ellipses. The
+            // details now get the card's full width.
             <Card key={r.symbol} className="!p-3.5">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
                 <div
                   className="w-9 h-9 rounded-[11px] flex items-center justify-center flex-none overflow-hidden"
                   style={{ background: `${ASSET_CLASS_COLOR[assetClass]}22` }}
                 >
                   <AssetIcon symbol={r.symbol} assetClass={assetClass} iconUrl={h?.iconUrl} />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold truncate flex items-center gap-1">
-                    {r.symbol}
-                    {done && (
-                      <Icon name="check_circle" style={{ fontSize: 15, color: "var(--up)" }} />
-                    )}
-                  </div>
-                  <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
-                    {formatMoney(invested)} · {t("plan.investedNow")} {investedPct.toFixed(1)}%
-                  </div>
-                  {/* Required contribution for this asset alone, so the plan
-                      can be acted on per-asset rather than only in total. */}
-                  {!done && pace && paceAt(pace) > 0 && (
-                    <div className="text-[11px] font-semibold truncate" style={{ color: "var(--accent)" }}>
-                      {t("plan.rowPace", {
-                        amount: formatMoney(paceAt(pace)),
-                        unit: t(`plan.unit.${frequency}`),
-                      })}
-                    </div>
+                <div className="flex-1 min-w-0 flex items-center gap-1">
+                  <span className="text-sm font-bold truncate">{r.symbol}</span>
+                  {done && (
+                    <Icon name="check_circle" style={{ fontSize: 15, color: "var(--up)" }} />
                   )}
                 </div>
                 <div className="flex items-center gap-1 flex-none">
@@ -375,7 +364,7 @@ export default function PlanPage() {
                     style={{
                       background: "var(--surface2)",
                       color: done ? "var(--muted)" : "var(--text)",
-                      width: 58,
+                      width: 54,
                       opacity: done ? 0.6 : 1,
                     }}
                   />
@@ -383,49 +372,56 @@ export default function PlanPage() {
                     %
                   </span>
                 </div>
-                <div className="text-right flex-none" style={{ minWidth: 96 }}>
+                <div className="text-right flex-none">
                   {done ? (
-                    <>
-                      <div
-                        className="flex items-center justify-end gap-1 text-sm font-bold"
-                        style={{ color: "var(--up)" }}
-                      >
-                        <Icon name="check_circle" style={{ fontSize: 17 }} />
-                        {t("plan.done")}
-                      </div>
-                      {remaining < 0 && (
-                        <div className="text-[10px]" style={{ color: "var(--muted)" }}>
-                          {t("plan.overPlan")} {formatMoney(-remaining)}
-                        </div>
-                      )}
-                    </>
+                    <div
+                      className="flex items-center justify-end gap-1 text-sm font-bold"
+                      style={{ color: "var(--up)" }}
+                    >
+                      <Icon name="check_circle" style={{ fontSize: 16 }} />
+                      {t("plan.done")}
+                    </div>
                   ) : (
-                    <>
-                      <div
-                        className="text-sm font-bold"
-                        style={{ color: remaining >= 0 ? "var(--up)" : "var(--down)" }}
-                      >
-                        {formatMoney(Math.abs(remaining))}
-                      </div>
-                      <div
-                        className="text-[10px]"
-                        style={{ color: remaining >= 0 ? "var(--up)" : "var(--down)" }}
-                      >
-                        {remaining >= 0
-                          ? `${t("plan.buyableNow")} ${formatMoney(remaining)}`
-                          : `${t("plan.overPlan")} ${formatMoney(-remaining)}`}
-                      </div>
-                    </>
+                    <div
+                      className="text-sm font-bold"
+                      style={{ color: remaining >= 0 ? "var(--up)" : "var(--down)" }}
+                    >
+                      {formatMoney(Math.abs(remaining))}
+                    </div>
                   )}
-                  <button
-                    onClick={() => setRows(rows.filter((_, i) => i !== idx))}
-                    className="text-[10px] font-semibold mt-0.5"
-                    style={{ color: "var(--down)" }}
-                  >
-                    {t("plan.removeFromPlan")}
-                  </button>
                 </div>
               </div>
+
+              <div
+                className="flex items-center justify-between gap-2 mt-2 pt-2 text-[11px]"
+                style={{ borderTop: "1px solid var(--surface2)" }}
+              >
+                <span style={{ color: "var(--muted)" }}>
+                  {t("plan.investedNow")} {formatMoney(invested)} · {investedPct.toFixed(1)}%
+                </span>
+                {!done && pace && paceAt(pace) > 0 ? (
+                  <span className="font-semibold flex-none" style={{ color: "var(--accent)" }}>
+                    {t("plan.rowPace", {
+                      amount: formatMoney(paceAt(pace)),
+                      unit: t(`plan.unit.${frequency}`),
+                    })}
+                  </span>
+                ) : (
+                  remaining < 0 && (
+                    <span className="flex-none" style={{ color: "var(--muted)" }}>
+                      {t("plan.overPlan")} {formatMoney(-remaining)}
+                    </span>
+                  )
+                )}
+              </div>
+
+              <button
+                onClick={() => setRows(rows.filter((_, i) => i !== idx))}
+                className="text-[10.5px] font-semibold mt-1.5"
+                style={{ color: "var(--down)" }}
+              >
+                {t("plan.removeFromPlan")}
+              </button>
             </Card>
           );
         })}
