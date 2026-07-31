@@ -494,27 +494,24 @@ function TargetEditor({
   // Seeded once on mount (the parent only mounts this while open), so no
   // effect is needed to populate it.
   //
-  // Every held asset is listed even at 0%, so the form is a complete picture
-  // of the portfolio to choose from rather than only the assets that already
-  // have a target — a small position rounding to 0%, or one the user removed
-  // on a previous visit, would otherwise be missing with no way to add it
-  // back. Symbols with a saved target that are no longer held are kept too,
-  // so an intentional target for something not yet bought isn't lost.
-  const [draft, setDraft] = useState<DraftTarget[]>(() => {
-    const seed = new Map<string, number>();
-    for (const tg of initial.length ? initial : suggest()) {
-      seed.set(tg.symbol.toUpperCase(), tg.pct);
-    }
-    const rows = heldSymbols.map((symbol) => ({
-      symbol,
-      pct: String(seed.get(symbol) ?? 0),
-    }));
-    const heldSet = new Set(heldSymbols);
-    for (const [symbol, pct] of seed) {
-      if (!heldSet.has(symbol)) rows.push({ symbol, pct: String(pct) });
-    }
-    return rows;
-  });
+  // Which rows appear depends on whether a mix has been saved before:
+  //
+  //  first time — every held asset, so the whole portfolio is there to pick
+  //               from and nothing is hidden before any choice was made.
+  //  afterwards — only the saved targets. Listing every holding again would
+  //               undo removals: an asset dropped from the mix would be back
+  //               in the list on the next open, which reads as the remove
+  //               button not working. Held assets outside the mix are still
+  //               reachable, as "add back" chips below the list.
+  //
+  // Saved targets for assets no longer held are kept either way, so a
+  // deliberate target for something not yet bought isn't lost.
+  const [draft, setDraft] = useState<DraftTarget[]>(() =>
+    (initial.length ? initial : suggest()).map((tg) => ({
+      symbol: tg.symbol.toUpperCase(),
+      pct: String(tg.pct),
+    }))
+  );
   const [saving, setSaving] = useState(false);
 
   const total = draft.reduce((s, d) => s + (parseFloat(d.pct) || 0), 0);
