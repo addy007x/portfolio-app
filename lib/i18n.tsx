@@ -138,6 +138,23 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
     th: "ลงทุนปี {year} ครบทุนแล้ว 🎉",
     en: "{year} budget fully invested 🎉",
   },
+  "plan.paceTitle": { th: "ต้อง DCA เท่าไหร่ถึงจะครบสิ้นปี", en: "Pace needed to finish the year" },
+  "plan.paceLead": {
+    th: "เหลืออีก {months} เดือน ต้องลงเฉลี่ย",
+    en: "{months} months left — invest on average",
+  },
+  "plan.perMonth": { th: "/ เดือน", en: "/ month" },
+  "plan.paceOrWeekly": { th: "หรือสัปดาห์ละ {amount}", en: "or {amount} per week" },
+  "plan.paceBehind": {
+    th: "ตามแผนถึงตอนนี้ควรลงไปแล้วมากกว่านี้ {amount} — ยอดต่อเดือนข้างบนรวมส่วนที่ตามไม่ทันไว้แล้ว",
+    en: "You're {amount} behind the even-pace schedule — the monthly figure above already covers catching up.",
+  },
+  "plan.paceComplete": { th: "ลงครบตามแผนปีนี้แล้ว ✓", en: "This year's plan is fully invested ✓" },
+  "plan.paceYearOver": {
+    th: "ปีนี้ผ่านไปแล้ว เลือกปีปัจจุบันเพื่อดูแผนที่ยังลงได้",
+    en: "That year has passed — pick the current year to see an active plan.",
+  },
+  "plan.rowPerMonth": { th: "ต้องลงเดือนละ {amount}", en: "{amount} / month" },
   "plan.budgetThisYear": { th: "ทุนปีนี้", en: "This year's budget" },
   "plan.notSavedYet": { th: "ยังไม่ได้บันทึกปีนี้", en: "Not saved for this year yet" },
   "plan.savedInfo": { th: "บันทึกแผนแล้ว", en: "Plan saved" },

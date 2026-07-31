@@ -8,6 +8,7 @@ import {
   getInvestPlan,
   saveInvestPlan,
 } from "@/lib/firestore";
+import { computeDcaSchedule } from "@/lib/dcaSchedule";
 import type { Holding, Transaction } from "@/lib/types";
 import { ASSET_CLASS_COLOR } from "@/lib/types";
 import { Card, Icon } from "@/components/Card";
@@ -97,6 +98,18 @@ export default function PlanPage() {
   const budgetNum = parseFloat(budget) || 0;
   const totalInvested = rows.reduce((sum, r) => sum + investedThisYear(r.symbol), 0);
   const remainingBudget = budgetNum - totalInvested;
+
+  // Pace needed to finish the plan by 31 Dec, from today. Uses the rows as
+  // currently edited (not just the saved plan) so adjusting a percentage
+  // updates the required contribution immediately.
+  const schedule = computeDcaSchedule(
+    budgetNum,
+    rows.map((r) => ({ symbol: r.symbol, pct: parseFloat(r.pct) || 0 })),
+    Object.fromEntries(rows.map((r) => [r.symbol.toUpperCase(), investedThisYear(r.symbol)])),
+    beYear - 543
+  );
+  const paceRowFor = (symbol: string) =>
+    schedule.rows.find((p) => p.symbol === symbol.toUpperCase());
   const pctSum = rows.reduce((sum, r) => sum + (parseFloat(r.pct) || 0), 0);
 
   const inPlan = new Set(rows.map((r) => r.symbol.toUpperCase()));
@@ -167,6 +180,51 @@ export default function PlanPage() {
         </button>
       </Card>
 
+      {/* Pace needed from today to finish the year's plan. Only meaningful
+          once there's a budget and something to spread it across. */}
+      {budgetNum > 0 && schedule.rows.length > 0 && (
+        <Card className="mt-3">
+          <div className="flex items-center gap-2 mb-2.5">
+            <Icon name="calendar_month" style={{ fontSize: 19, color: "var(--accent)" }} />
+            <span className="text-sm font-bold">{t("plan.paceTitle")}</span>
+          </div>
+
+          {schedule.yearOver ? (
+            <div className="text-[12px] py-1" style={{ color: "var(--muted)" }}>
+              {t("plan.paceYearOver")}
+            </div>
+          ) : schedule.totalRemaining <= 0 ? (
+            <div className="text-[12.5px] font-bold py-1" style={{ color: "var(--up)" }}>
+              {t("plan.paceComplete")}
+            </div>
+          ) : (
+            <>
+              <div className="text-[11px]" style={{ color: "var(--muted)" }}>
+                {t("plan.paceLead", { months: schedule.monthsLeft })}
+              </div>
+              <div className="text-[26px] font-extrabold tracking-tight mt-0.5">
+                {formatMoney(schedule.totalPerMonth)}
+                <span className="text-[13px] font-bold ml-1.5" style={{ color: "var(--muted)" }}>
+                  {t("plan.perMonth")}
+                </span>
+              </div>
+              <div className="text-[11.5px] mt-0.5" style={{ color: "var(--muted)" }}>
+                {t("plan.paceOrWeekly", { amount: formatMoney(schedule.totalPerWeek) })}
+              </div>
+
+              {schedule.totalBehind > 0 && (
+                <div
+                  className="text-[11px] rounded-[10px] px-3 py-2 mt-2.5"
+                  style={{ background: "rgba(224,57,62,0.12)", color: "var(--down)" }}
+                >
+                  {t("plan.paceBehind", { amount: formatMoney(schedule.totalBehind) })}
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+      )}
+
       {addable.length > 0 && (
         <div className="flex items-end gap-2 mt-3">
           <div className="flex-1">
@@ -225,6 +283,7 @@ export default function PlanPage() {
           // user ever got to set its percentage.
           const done = budgetNum > 0 && pctNum > 0 && remaining <= 0;
           const assetClass = h?.assetClass ?? "foreign_stock";
+          const pace = paceRowFor(r.symbol);
           return (
             <Card key={r.symbol} className="!p-3.5">
               <div className="flex items-center gap-3">
@@ -244,6 +303,13 @@ export default function PlanPage() {
                   <div className="text-[11px] truncate" style={{ color: "var(--muted)" }}>
                     {formatMoney(invested)} · {t("plan.investedNow")} {investedPct.toFixed(1)}%
                   </div>
+                  {/* Required contribution for this asset alone, so the plan
+                      can be acted on per-asset rather than only in total. */}
+                  {!done && pace && pace.perMonth > 0 && (
+                    <div className="text-[11px] font-semibold truncate" style={{ color: "var(--accent)" }}>
+                      {t("plan.rowPerMonth", { amount: formatMoney(pace.perMonth) })}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 flex-none">
                   <input
