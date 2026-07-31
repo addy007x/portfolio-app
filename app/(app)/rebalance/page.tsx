@@ -298,6 +298,7 @@ export default function RebalancePage() {
         <TargetEditor
           onClose={() => setEditing(false)}
           initial={targets}
+          holdings={holdings}
           suggest={() => suggestTargetsFromHoldings(holdings)}
           onSave={async (next) => {
             if (!user || !planKey) return;
@@ -464,24 +465,56 @@ interface DraftTarget {
 function TargetEditor({
   onClose,
   initial,
+  holdings,
   suggest,
   onSave,
 }: {
   onClose: () => void;
   initial: RebalanceTarget[];
+  holdings: Holding[];
   suggest: () => RebalanceTarget[];
   onSave: (targets: RebalanceTarget[]) => Promise<void>;
 }) {
   const { t } = useLanguage();
+
+  // Everything currently held, biggest first — the order the user sees them
+  // in elsewhere.
+  const heldSymbols = useMemo(() => {
+    const byValue = new Map<string, number>();
+    for (const h of holdings) {
+      if (h.assetClass === "cash" || h.quantity <= 0) continue;
+      const symbol = h.symbol.toUpperCase();
+      byValue.set(symbol, (byValue.get(symbol) ?? 0) + h.quantity * h.currentPrice);
+    }
+    return Array.from(byValue.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([symbol]) => symbol);
+  }, [holdings]);
+
   // Seeded once on mount (the parent only mounts this while open), so no
-  // effect is needed to populate it. Falls back to the current mix so a
-  // first-time user starts from something real rather than a blank form.
-  const [draft, setDraft] = useState<DraftTarget[]>(() =>
-    (initial.length ? initial : suggest()).map((tg) => ({
-      symbol: tg.symbol,
-      pct: String(tg.pct),
-    }))
-  );
+  // effect is needed to populate it.
+  //
+  // Every held asset is listed even at 0%, so the form is a complete picture
+  // of the portfolio to choose from rather than only the assets that already
+  // have a target — a small position rounding to 0%, or one the user removed
+  // on a previous visit, would otherwise be missing with no way to add it
+  // back. Symbols with a saved target that are no longer held are kept too,
+  // so an intentional target for something not yet bought isn't lost.
+  const [draft, setDraft] = useState<DraftTarget[]>(() => {
+    const seed = new Map<string, number>();
+    for (const tg of initial.length ? initial : suggest()) {
+      seed.set(tg.symbol.toUpperCase(), tg.pct);
+    }
+    const rows = heldSymbols.map((symbol) => ({
+      symbol,
+      pct: String(seed.get(symbol) ?? 0),
+    }));
+    const heldSet = new Set(heldSymbols);
+    for (const [symbol, pct] of seed) {
+      if (!heldSet.has(symbol)) rows.push({ symbol, pct: String(pct) });
+    }
+    return rows;
+  });
   const [saving, setSaving] = useState(false);
 
   const total = draft.reduce((s, d) => s + (parseFloat(d.pct) || 0), 0);
@@ -503,32 +536,66 @@ function TargetEditor({
   return (
     <Modal open onClose={onClose} title={t("rebalance.editTitle")}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-        {draft.map((d, i) => (
-          <div key={`${d.symbol}-${i}`} className="flex items-center gap-2">
-            <span className="flex-1 text-[12.5px] font-bold truncate">{d.symbol}</span>
-            <input
-              type="number"
-              step="any"
-              value={d.pct}
-              onChange={(e) =>
-                setDraft((prev) => prev.map((x, j) => (j === i ? { ...x, pct: e.target.value } : x)))
-              }
-              className="rounded-[10px] px-2.5 py-1.5 text-sm outline-none text-right"
-              style={{ background: "var(--surface2)", color: "var(--text)", width: 76 }}
-            />
-            <span className="text-[12px]" style={{ color: "var(--muted)" }}>
-              %
-            </span>
-            <button
-              type="button"
-              onClick={() => setDraft((prev) => prev.filter((_, j) => j !== i))}
-              className="w-7 h-7 rounded-full flex items-center justify-center flex-none"
-              style={{ background: "var(--surface2)" }}
-            >
-              <Icon name="close" style={{ fontSize: 14, color: "var(--muted)" }} />
-            </button>
-          </div>
-        ))}
+        <div className="text-[10.5px] mb-0.5" style={{ color: "var(--muted)" }}>
+          {t("rebalance.editHelp")}
+        </div>
+        {draft.map((d, i) => {
+          const isHeld = heldSymbols.includes(d.symbol);
+          const value = parseFloat(d.pct) || 0;
+          return (
+            <div key={`${d.symbol}-${i}`} className="flex items-center gap-2">
+              <span
+                className="flex-1 text-[12.5px] font-bold truncate"
+                style={{ opacity: value > 0 ? 1 : 0.45 }}
+              >
+                {d.symbol}
+                {!isHeld && (
+                  <span className="text-[10px] font-normal ml-1.5" style={{ color: "var(--muted)" }}>
+                    {t("rebalance.notHeld")}
+                  </span>
+                )}
+              </span>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                value={d.pct}
+                onFocus={(e) => e.currentTarget.select()}
+                onChange={(e) =>
+                  setDraft((prev) =>
+                    prev.map((x, j) => (j === i ? { ...x, pct: e.target.value } : x))
+                  )
+                }
+                className="rounded-[10px] px-2.5 py-1.5 text-sm outline-none text-right"
+                style={{ background: "var(--surface2)", color: "var(--text)", width: 76 }}
+              />
+              <span className="text-[12px]" style={{ color: "var(--muted)" }}>
+                %
+              </span>
+              {/* Held assets clear to 0 rather than vanish — removing the row
+                  would leave no way to give that asset a target again. Rows
+                  for assets no longer held can be dropped outright. */}
+              <button
+                type="button"
+                onClick={() =>
+                  setDraft((prev) =>
+                    isHeld
+                      ? prev.map((x, j) => (j === i ? { ...x, pct: "0" } : x))
+                      : prev.filter((_, j) => j !== i)
+                  )
+                }
+                className="w-7 h-7 rounded-full flex items-center justify-center flex-none"
+                style={{ background: "var(--surface2)" }}
+                aria-label={isHeld ? t("rebalance.clearTarget") : t("rebalance.removeRow")}
+              >
+                <Icon
+                  name={isHeld ? "backspace" : "close"}
+                  style={{ fontSize: 13, color: "var(--muted)" }}
+                />
+              </button>
+            </div>
+          );
+        })}
 
         <div
           className="flex justify-between items-center text-[12px] font-bold mt-1 pt-2"
@@ -540,9 +607,21 @@ function TargetEditor({
           </span>
         </div>
 
+        {/* Fills in the percentages without changing which rows are listed,
+            so nothing disappears from the form. */}
         <button
           type="button"
-          onClick={() => setDraft(suggest().map((tg) => ({ symbol: tg.symbol, pct: String(tg.pct) })))}
+          onClick={() => {
+            const suggested = new Map(
+              suggest().map((tg) => [tg.symbol.toUpperCase(), tg.pct])
+            );
+            setDraft((prev) =>
+              prev.map((row) => ({
+                ...row,
+                pct: String(suggested.get(row.symbol) ?? 0),
+              }))
+            );
+          }}
           className="rounded-[11px] py-2 text-[11.5px] font-semibold mt-1"
           style={{ background: "var(--surface2)", color: "var(--accent)" }}
         >

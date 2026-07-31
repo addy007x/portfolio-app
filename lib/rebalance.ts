@@ -218,6 +218,10 @@ export function computeRebalance(
 // opens with something sensible instead of a blank form the user has to fill
 // from nothing. Rounded to whole percents, with the largest holding
 // absorbing the rounding remainder so the total is exactly 100.
+//
+// Every held symbol is returned, including ones that round down to 0% — the
+// editor lists them so a small position can still be given a deliberate
+// target, rather than silently disappearing from the form.
 export function suggestTargetsFromHoldings(holdings: Holding[]): RebalanceTarget[] {
   const priced = holdings.filter((h) => h.assetClass !== "cash" && h.quantity > 0);
   const bySymbol = new Map<string, number>();
@@ -235,5 +239,5 @@ export function suggestTargetsFromHoldings(holdings: Holding[]): RebalanceTarget
   }));
   const drift = 100 - targets.reduce((s, t) => s + t.pct, 0);
   if (targets.length && drift !== 0) targets[0].pct += drift;
-  return targets.filter((t) => t.pct > 0);
+  return targets;
 }

@@ -617,6 +617,13 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "rebalance.setTargets": { th: "ตั้งสัดส่วนเป้าหมาย", en: "Set target mix" },
   "rebalance.editTitle": { th: "สัดส่วนเป้าหมาย", en: "Target mix" },
   "rebalance.useCurrentMix": { th: "ใช้สัดส่วนปัจจุบันเป็นเป้าหมาย", en: "Use current mix as target" },
+  "rebalance.notHeld": { th: "(ไม่มีในพอร์ต)", en: "(not held)" },
+  "rebalance.clearTarget": { th: "ล้างเป็น 0%", en: "Clear to 0%" },
+  "rebalance.removeRow": { th: "ลบออกจากรายการ", en: "Remove from list" },
+  "rebalance.editHelp": {
+    th: "แสดงสินทรัพย์ทุกตัวในพอร์ต ใส่ 0% สำหรับตัวที่ไม่ต้องการให้อยู่ในเป้าหมาย",
+    en: "Every asset in the portfolio is listed. Set 0% for anything you don't want in the target mix.",
+  },
   "rebalance.saveTargets": { th: "บันทึกสัดส่วน", en: "Save targets" },
   "month.jan": { th: "ม.ค.", en: "Jan" },
   "month.feb": { th: "ก.พ.", en: "Feb" },
