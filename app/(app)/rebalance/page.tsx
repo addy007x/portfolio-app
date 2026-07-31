@@ -518,6 +518,8 @@ function TargetEditor({
   const [saving, setSaving] = useState(false);
 
   const total = draft.reduce((s, d) => s + (parseFloat(d.pct) || 0), 0);
+  const listed = new Set(draft.map((d) => d.symbol));
+  const removedHeld = heldSymbols.filter((symbol) => !listed.has(symbol));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -572,30 +574,45 @@ function TargetEditor({
               <span className="text-[12px]" style={{ color: "var(--muted)" }}>
                 %
               </span>
-              {/* Held assets clear to 0 rather than vanish — removing the row
-                  would leave no way to give that asset a target again. Rows
-                  for assets no longer held can be dropped outright. */}
+              {/* Any row can be removed. Held assets that get removed come
+                  back as chips below, so dropping one is never a dead end. */}
               <button
                 type="button"
-                onClick={() =>
-                  setDraft((prev) =>
-                    isHeld
-                      ? prev.map((x, j) => (j === i ? { ...x, pct: "0" } : x))
-                      : prev.filter((_, j) => j !== i)
-                  )
-                }
+                onClick={() => setDraft((prev) => prev.filter((_, j) => j !== i))}
                 className="w-7 h-7 rounded-full flex items-center justify-center flex-none"
                 style={{ background: "var(--surface2)" }}
-                aria-label={isHeld ? t("rebalance.clearTarget") : t("rebalance.removeRow")}
+                aria-label={t("rebalance.removeRow")}
               >
-                <Icon
-                  name={isHeld ? "backspace" : "close"}
-                  style={{ fontSize: 13, color: "var(--muted)" }}
-                />
+                <Icon name="close" style={{ fontSize: 13, color: "var(--muted)" }} />
               </button>
             </div>
           );
         })}
+
+        {/* Held assets that were removed from the list. Without this, removing
+            a row would be irreversible — there'd be no control anywhere to
+            put that asset back. */}
+        {removedHeld.length > 0 && (
+          <div className="mt-1">
+            <div className="text-[10.5px] mb-1.5" style={{ color: "var(--muted)" }}>
+              {t("rebalance.addBack")}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {removedHeld.map((symbol) => (
+                <button
+                  key={symbol}
+                  type="button"
+                  onClick={() => setDraft((prev) => [...prev, { symbol, pct: "0" }])}
+                  className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                  style={{ background: "var(--surface2)", color: "var(--accent)" }}
+                >
+                  <Icon name="add" style={{ fontSize: 13 }} />
+                  {symbol}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div
           className="flex justify-between items-center text-[12px] font-bold mt-1 pt-2"
