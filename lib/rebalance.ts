@@ -52,6 +52,10 @@ export interface RebalanceResult {
   // Set when the mode couldn't fully close the gap — e.g. DCA money runs out
   // before every underweight position is topped up.
   shortfall: number;
+  // Value of holdings outside the target mix. Not part of any figure above;
+  // surfaced only so the page can state that it's excluded, rather than
+  // leaving the difference from the real portfolio total unexplained.
+  excludedValue: number;
 }
 
 const EMPTY: RebalanceResult = {
@@ -64,6 +68,7 @@ const EMPTY: RebalanceResult = {
   totalBuy: 0,
   totalSell: 0,
   shortfall: 0,
+  excludedValue: 0,
 };
 
 // Distributes `pool` across rows in proportion to how far each is below
@@ -92,19 +97,24 @@ export function computeRebalance(
 ): RebalanceResult {
   if (!targets.length) return EMPTY;
 
-  const priced = holdings.filter((h) => h.assetClass !== "cash" && h.quantity > 0);
+  const targetSymbols = new Set(targets.map((t) => t.symbol.toUpperCase()));
+  const held = holdings.filter((h) => h.assetClass !== "cash" && h.quantity > 0);
+
+  // Only assets in the target mix take part. An asset the user removed from
+  // the mix is deliberately out of scope, so it is excluded from the total
+  // too — leaving it in would make every percentage a share of money the mix
+  // doesn't govern, and it would keep appearing as a 0%-target row that
+  // can't be dismissed. Its value is reported separately as `excludedValue`
+  // so the page can say plainly that it isn't counted.
+  const priced = held.filter((h) => targetSymbols.has(h.symbol.toUpperCase()));
+  const excludedValue = held
+    .filter((h) => !targetSymbols.has(h.symbol.toUpperCase()))
+    .reduce((s, h) => s + h.quantity * h.currentPrice, 0);
+
   const valueOf = (symbol: string) =>
     priced
       .filter((h) => h.symbol.toUpperCase() === symbol)
       .reduce((s, h) => s + h.quantity * h.currentPrice, 0);
-
-  // Targets drive the row set, but a holding with no target still occupies
-  // real value — it must appear (target 0%) or the percentages would be
-  // computed against an incomplete total and every number would be wrong.
-  const targetSymbols = new Set(targets.map((t) => t.symbol.toUpperCase()));
-  const untargeted = Array.from(
-    new Set(priced.map((h) => h.symbol.toUpperCase()).filter((s) => !targetSymbols.has(s)))
-  );
 
   const totalValue = priced.reduce((s, h) => s + h.quantity * h.currentPrice, 0);
   if (totalValue <= 0) return EMPTY;
@@ -124,35 +134,20 @@ export function computeRebalance(
   // table calls its target while the suggestion buys past it.
   const targetBase = mode === "dca" ? totalValue + dcaAmount : totalValue;
 
-  const rows: RebalanceRow[] = [
-    ...targets.map((t) => {
-      const symbol = t.symbol.toUpperCase();
-      const currentValue = valueOf(symbol);
-      return {
-        symbol,
-        ...meta(symbol),
-        targetPct: t.pct,
-        currentPct: (currentValue / totalValue) * 100,
-        driftPct: (currentValue / totalValue) * 100 - t.pct,
-        currentValue,
-        targetValue: (targetBase * t.pct) / 100,
-        action: 0,
-      };
-    }),
-    ...untargeted.map((symbol) => {
-      const currentValue = valueOf(symbol);
-      return {
-        symbol,
-        ...meta(symbol),
-        targetPct: 0,
-        currentPct: (currentValue / totalValue) * 100,
-        driftPct: (currentValue / totalValue) * 100,
-        currentValue,
-        targetValue: 0,
-        action: 0,
-      };
-    }),
-  ];
+  const rows: RebalanceRow[] = targets.map((t) => {
+    const symbol = t.symbol.toUpperCase();
+    const currentValue = valueOf(symbol);
+    return {
+      symbol,
+      ...meta(symbol),
+      targetPct: t.pct,
+      currentPct: (currentValue / totalValue) * 100,
+      driftPct: (currentValue / totalValue) * 100 - t.pct,
+      currentValue,
+      targetValue: (targetBase * t.pct) / 100,
+      action: 0,
+    };
+  });
 
   const maxDriftPct = rows.reduce((m, r) => Math.max(m, Math.abs(r.driftPct)), 0);
   const totalDriftPct = rows.reduce((s, r) => s + Math.abs(r.driftPct), 0) / 2;
@@ -211,6 +206,7 @@ export function computeRebalance(
     totalBuy: buys.reduce((s, r) => s + r.action, 0),
     totalSell: sells.reduce((s, r) => s - r.action, 0),
     shortfall,
+    excludedValue,
   };
 }
 

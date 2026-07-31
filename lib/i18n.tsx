@@ -620,6 +620,10 @@ const DICTIONARY: Record<string, Record<Language, string>> = {
   "rebalance.notHeld": { th: "(ไม่มีในพอร์ต)", en: "(not held)" },
   "rebalance.removeRow": { th: "ลบออกจากรายการ", en: "Remove from list" },
   "rebalance.addBack": { th: "แตะเพื่อเพิ่มกลับ", en: "Tap to add back" },
+  "rebalance.excluded": {
+    th: "ไม่รวม {amount} (สินทรัพย์นอกเป้าหมาย)",
+    en: "Excludes {amount} not in the target mix",
+  },
   "rebalance.editHelp": {
     th: "แสดงสินทรัพย์ทุกตัวในพอร์ต ตัวไหนไม่ต้องการให้อยู่ในเป้าหมาย กด × ลบออกได้ (เพิ่มกลับได้ทีหลัง)",
     en: "Every asset in the portfolio is listed. Remove anything you don't want in the target mix with × — you can add it back later.",

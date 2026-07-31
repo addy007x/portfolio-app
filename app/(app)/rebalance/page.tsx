@@ -116,6 +116,11 @@ export default function RebalancePage() {
               <div className="text-[19px] font-extrabold mt-0.5 truncate">
                 {formatMoney(result.totalValue)}
               </div>
+              {result.excludedValue > 0 && (
+                <div className="text-[10px] mt-0.5" style={{ color: "var(--muted)" }}>
+                  {t("rebalance.excluded", { amount: formatMoney(result.excludedValue) })}
+                </div>
+              )}
             </Card>
             <Card className="!p-3.5">
               <div className="text-[11px]" style={{ color: "var(--muted)" }}>
