@@ -6,8 +6,10 @@ export interface DcaPaceRow {
   target: number; // full-year allocation for this asset
   invested: number; // already put in this year
   remaining: number; // still to invest, never negative
-  perMonth: number; // to finish by 31 Dec at an even pace
+  // Even pace to finish by 31 Dec, at each contribution frequency.
+  perMonth: number;
   perWeek: number;
+  perDay: number;
   // What should have been invested by now if the year's budget were spread
   // evenly. Lets the UI say "ahead" or "behind" rather than only "remaining".
   expectedByNow: number;
@@ -21,12 +23,14 @@ export interface DcaSchedule {
   // already gone.
   monthsLeft: number;
   weeksLeft: number;
+  daysLeft: number;
   yearElapsedPct: number;
   totalTarget: number;
   totalInvested: number;
   totalRemaining: number;
   totalPerMonth: number;
   totalPerWeek: number;
+  totalPerDay: number;
   totalBehind: number;
   rows: DcaPaceRow[];
   // True once the plan year has passed — nothing left to pace.
@@ -95,6 +99,7 @@ export function computeDcaSchedule(
       remaining,
       perMonth: monthsLeft > 0 ? remaining / monthsLeft : 0,
       perWeek: weeksLeft > 0 ? remaining / weeksLeft : 0,
+      perDay: daysLeft > 0 ? remaining / daysLeft : 0,
       expectedByNow,
       behind: Math.max(0, expectedByNow - invested),
       done: target > 0 && remaining <= 0,
@@ -107,6 +112,7 @@ export function computeDcaSchedule(
   return {
     monthsLeft,
     weeksLeft,
+    daysLeft,
     yearElapsedPct: yearElapsed,
     totalTarget,
     // Summed from the rows rather than every buy this year, so money spent
@@ -115,6 +121,7 @@ export function computeDcaSchedule(
     totalRemaining,
     totalPerMonth: monthsLeft > 0 ? totalRemaining / monthsLeft : 0,
     totalPerWeek: weeksLeft > 0 ? totalRemaining / weeksLeft : 0,
+    totalPerDay: daysLeft > 0 ? totalRemaining / daysLeft : 0,
     totalBehind: rows.reduce((s, r) => s + r.behind, 0),
     rows,
     yearOver,

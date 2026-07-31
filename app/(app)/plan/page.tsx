@@ -26,6 +26,11 @@ interface PlanRow {
   pct: string; // kept as text while editing
 }
 
+// How often the user intends to contribute. Drives which of the computed
+// paces is shown, both in the summary and on each asset row.
+type DcaFrequency = "day" | "week" | "month";
+const FREQUENCIES: DcaFrequency[] = ["day", "week", "month"];
+
 export default function PlanPage() {
   const { user } = useAuth();
   const { formatMoney } = useCurrencyDisplay();
@@ -38,6 +43,7 @@ export default function PlanPage() {
   const [savedExists, setSavedExists] = useState(false);
   const [saving, setSaving] = useState(false);
   const [addSymbol, setAddSymbol] = useState("");
+  const [frequency, setFrequency] = useState<DcaFrequency>("month");
 
   useEffect(() => {
     if (!user) return;
@@ -110,6 +116,15 @@ export default function PlanPage() {
   );
   const paceRowFor = (symbol: string) =>
     schedule.rows.find((p) => p.symbol === symbol.toUpperCase());
+
+  const paceAt = (row: { perDay: number; perWeek: number; perMonth: number }) =>
+    frequency === "day" ? row.perDay : frequency === "week" ? row.perWeek : row.perMonth;
+  const periodsLeft =
+    frequency === "day"
+      ? schedule.daysLeft
+      : frequency === "week"
+        ? schedule.weeksLeft
+        : schedule.monthsLeft;
   const pctSum = rows.reduce((sum, r) => sum + (parseFloat(r.pct) || 0), 0);
 
   const inPlan = new Set(rows.map((r) => r.symbol.toUpperCase()));
@@ -186,8 +201,30 @@ export default function PlanPage() {
         <Card className="mt-3">
           <div className="flex items-center gap-2 mb-2.5">
             <Icon name="calendar_month" style={{ fontSize: 19, color: "var(--accent)" }} />
-            <span className="text-sm font-bold">{t("plan.paceTitle")}</span>
+            <span className="flex-1 text-sm font-bold">{t("plan.paceTitle")}</span>
           </div>
+
+          {!schedule.yearOver && schedule.totalRemaining > 0 && (
+            <div
+              className="flex rounded-[10px] overflow-hidden mb-3"
+              style={{ background: "var(--surface2)" }}
+            >
+              {FREQUENCIES.map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFrequency(f)}
+                  className="flex-1 py-1.5 text-[11.5px] font-semibold"
+                  style={
+                    frequency === f
+                      ? { background: "var(--accent)", color: "#04120c" }
+                      : { color: "var(--muted)" }
+                  }
+                >
+                  {t(`plan.freq.${f}`)}
+                </button>
+              ))}
+            </div>
+          )}
 
           {schedule.yearOver ? (
             <div className="text-[12px] py-1" style={{ color: "var(--muted)" }}>
@@ -200,16 +237,25 @@ export default function PlanPage() {
           ) : (
             <>
               <div className="text-[11px]" style={{ color: "var(--muted)" }}>
-                {t("plan.paceLead", { months: schedule.monthsLeft })}
+                {t("plan.paceLead", {
+                  count: Math.floor(periodsLeft),
+                  unit: t(`plan.unit.${frequency}`),
+                })}
               </div>
               <div className="text-[26px] font-extrabold tracking-tight mt-0.5">
-                {formatMoney(schedule.totalPerMonth)}
+                {formatMoney(
+                  paceAt({
+                    perDay: schedule.totalPerDay,
+                    perWeek: schedule.totalPerWeek,
+                    perMonth: schedule.totalPerMonth,
+                  })
+                )}
                 <span className="text-[13px] font-bold ml-1.5" style={{ color: "var(--muted)" }}>
-                  {t("plan.perMonth")}
+                  / {t(`plan.unit.${frequency}`)}
                 </span>
               </div>
               <div className="text-[11.5px] mt-0.5" style={{ color: "var(--muted)" }}>
-                {t("plan.paceOrWeekly", { amount: formatMoney(schedule.totalPerWeek) })}
+                {t("plan.paceRemaining", { amount: formatMoney(schedule.totalRemaining) })}
               </div>
 
               {schedule.totalBehind > 0 && (
@@ -305,9 +351,12 @@ export default function PlanPage() {
                   </div>
                   {/* Required contribution for this asset alone, so the plan
                       can be acted on per-asset rather than only in total. */}
-                  {!done && pace && pace.perMonth > 0 && (
+                  {!done && pace && paceAt(pace) > 0 && (
                     <div className="text-[11px] font-semibold truncate" style={{ color: "var(--accent)" }}>
-                      {t("plan.rowPerMonth", { amount: formatMoney(pace.perMonth) })}
+                      {t("plan.rowPace", {
+                        amount: formatMoney(paceAt(pace)),
+                        unit: t(`plan.unit.${frequency}`),
+                      })}
                     </div>
                   )}
                 </div>
