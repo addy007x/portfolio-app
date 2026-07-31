@@ -158,6 +158,20 @@ export interface InvestPlan {
   updatedAtMs?: number;
 }
 
+// Desired portfolio mix, set on the Rebalance page. Deliberately separate
+// from InvestPlan: that one splits a yearly DCA budget (how much new money
+// goes where), while this describes what the portfolio should look like
+// overall — the two answer different questions and can legitimately differ.
+export interface RebalanceTarget {
+  symbol: string;
+  pct: number; // 0-100
+}
+
+export interface RebalancePlan {
+  targets: RebalanceTarget[];
+  updatedAtMs?: number;
+}
+
 export interface ValueSnapshot {
   id: string;
   date: string; // YYYY-MM-DD, or a full ISO timestamp for math-generated series

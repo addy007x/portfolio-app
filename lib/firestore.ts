@@ -25,6 +25,7 @@ import type {
   AssetClass,
   InvestPlan,
   PriceAlert,
+  RebalancePlan,
 } from "@/lib/types";
 import { ASSET_CLASS_COLOR, assetClassLabel } from "@/lib/types";
 
@@ -731,6 +732,26 @@ export async function getInvestPlan(uid: string, beYear: number): Promise<Invest
 
 export async function saveInvestPlan(uid: string, beYear: number, plan: InvestPlan) {
   await setDoc(doc(db, "users", uid, "investPlans", String(beYear)), {
+    ...plan,
+    updatedAtMs: Date.now(),
+  });
+}
+
+// ---- Rebalance target mix ----
+// One doc per portfolio, since each portfolio can legitimately aim at a
+// different mix. Keyed by the portfolio id the page is currently showing.
+export function watchRebalancePlan(
+  uid: string,
+  portfolioId: string,
+  cb: (plan: RebalancePlan | null) => void
+): Unsubscribe {
+  return onSnapshot(doc(db, "users", uid, "rebalancePlans", portfolioId), (snap) => {
+    cb(snap.exists() ? (snap.data() as RebalancePlan) : null);
+  });
+}
+
+export async function saveRebalancePlan(uid: string, portfolioId: string, plan: RebalancePlan) {
+  await setDoc(doc(db, "users", uid, "rebalancePlans", portfolioId), {
     ...plan,
     updatedAtMs: Date.now(),
   });
